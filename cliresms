@@ -1,0 +1,301 @@
+#!/usr/bin/env python
+
+# Copyright 2012 Russell Davies. Licensed under the Apache License, v2.0.
+
+import urllib, urllib2, cookielib
+from urllib2 import urlopen, Request, URLError, HTTPError
+import os, signal, sys, argparse, re, getpass
+
+__version__ = '0.1'
+# Default conf file is in ~/.cliresms.conf
+__conf_file__ = os.path.expanduser("~") + '/.cliresms.conf'
+__cookie_file__ = os.path.expanduser("~") + '/.cliresms.cookie'
+
+username = None
+password = None
+split = None
+carrier = None
+message = None
+aliases = {}
+recipients = []
+conf_file = None
+
+def main():
+	# Register signal handler to catch ctrl+c to gracefully quit
+	signal.signal(signal.SIGINT, signal_handler)
+
+	# Parse cli args
+	try:
+		cli_parser = setup_parser()
+		# Exit on non-existent option supplied config file otherwise parse cli args
+		args = cli_parser.parse_args()
+	except IOError as err:
+		print(str(err))
+		sys.exit(err.errno)
+
+	# Read supplied conf file otherwise try to load default conf file (if exists)
+	global conf_file
+	if args.conf_file:
+		read_config(args.conf_file)
+		#args.conf_file.close()
+		conf_file = args.conf_file
+	else:
+		try:
+			#with open(__conf_file__) as f:
+			#	read_config(f)
+			conf_file = open(__conf_file__, 'r+')
+		except IOError:
+			pass
+	
+	# Override any conf file loaded values with cli args
+	global username, password, carrier, split
+	if args.carrier:
+		carrier = args.carrier
+	if not carrier:
+		print("You must specify a carrier. Qutting...")
+		sys.exit(1)
+
+	if args.username:
+		username = args.username
+	else:
+		if not username:
+			username = getpass.getuser()
+			print("Using login name: %s" % username)
+
+	if args.password:
+		password = args.password
+	else:
+		if not password:
+			password = getpass.getpass()
+
+	if not split:
+		split = args.split_messages
+	message = get_message(args.message)
+
+	# Build a list of numbers from aliases
+	process_recipients(args.recipients)
+
+	# Send SMS
+	try:
+		for r in recipients:
+			for m in message:
+				send_message(r, m)
+	except HTTPError, e:
+		print("The server couldn't fulfill the request.")
+		print("Error code: ", e.code)
+	except URLError, e:
+		print("Could not contact server, possible connectivity problem.")
+		print("Reason: ", e.reason)
+	
+	# Save any unknown numbers to config file
+	save_aliases()
+
+def read_config(file):
+	global username, password, carrier, split
+
+	for line in map(lambda s: s.strip(), file.readlines()):
+		if 'username' in line:
+			username = line.split()[-1]
+			next
+		if 'password' in line:
+			password = line.split()[-1]
+			next
+		if 'carrier' in line:
+			carrier = line.split()[-1]
+			next
+		if 'nosplit' in line:
+			split = True
+			next
+		if 'alias' in line:
+			matches = re.search(r'^\s*alias\s*([\w\.\-\_]*)\s*([\d\s\+]*)\s*$', line)
+			aliases[matches.group(1)] = matches.group(2).split()
+
+def get_message(message=None):
+	if not message:
+		# Prompt user for message text
+		print("Enter your message:")
+		input = []
+		while True:
+			line = sys.stdin.readline()
+			# Complete on EOF (ctrl-d) or '.' at start of a line
+			if not line or line == '.\n':
+				input[-1] = input[-1].rstrip()
+				break
+			input.append(line)
+		message = ''.join(input)
+
+	length = 160
+	if len(message) > length and split:
+		# Split message into multiple parts
+		return [message[i:i+length] for i in range(0, len(message), length)]
+	else:
+		return [message[:length]]
+
+def process_recipients(arg_recipients):
+	for recipient in arg_recipients:
+		if recipient in aliases:
+			# an alias contains a list of numbers so flatten out
+			[recipients.append(r) for r in aliases[recipient]]
+		else:
+			# recipient is a number not alias
+			if re.search(r'\+?\d', recipient):
+				recipients.append(recipient)
+			else:
+				print("Unknown alias: %s" % recipient)
+
+def save_aliases():
+	if not conf_file: return
+
+	new_aliases = {}
+	alias_nums = [num for sublist in aliases.values() for num in sublist]
+	for num in recipients:
+		if num in alias_nums:
+			continue
+		while True:
+			entered = raw_input("Create alias for %s with this name: " % num).strip()
+			if len(entered) < 1: break
+			if not entered.isalpha():
+				print("%s is an invalid alias name, no numbers allowed" % entered)
+				continue
+			if entered in aliases:
+				print("alias already exists")
+				continue
+			new_aliases[entered] = num
+			break
+	for name in new_aliases:
+		try:
+			conf_file.write("alias %s %s\n" % (name, new_aliases[name]))
+		except:
+			print("Could not write aliases to configuration file %s" % os.path.abspath(f.name))
+
+def send_message(recipient, message):
+	global username, password, carrier
+
+	account_type = { 'meteor': MeteorAccount,
+							#'o2': O2Account,
+							#'vodafone': VodafoneAccount,
+							#'three': ThreeAccount,
+						}.get(carrier,None)
+	if not account_type:
+		print("Invalid carrier. Qutting...")
+		sys.exit(1)
+
+	account = account_type(username, password)
+	if account.login(): print("Logged in")
+	if account.get_texts_remaining() < 0:
+		print("Site under load, unable to send message.")
+		sys.exit(1)
+
+	# Send message
+	print("Sending message..."),
+	if account.send_message(recipient, message):
+		account.texts_remaining -= 1
+		print("Message sent. %s texts remaining." % account.texts_remaining)
+		return True
+
+def setup_parser():
+	parser = argparse.ArgumentParser(prog='cliresms',
+		description='Send webtexts from the command line')
+	parser.add_argument('recipients', metavar='<number|alias|group>',
+		nargs='+',
+		help='One or more numbers or entries in the config file')
+	parser.add_argument('-u', '--username', metavar='STRING', 
+			help='Use this username (defaults to unix username)')
+	parser.add_argument('-p', '--password', metavar='STRING', 
+			help='Use this password (if omitted, will prompt for password)')
+	parser.add_argument('-c', '--config', metavar='FILE', type=argparse.FileType('r+'),
+			dest='conf_file', #default=__conf_file__, 
+			help='Use this configuration file (defaults to ~/.cliresms.conf)')
+	parser.add_argument('-s', '--split-messages', action='store_true', help='Allow message to be split into multiple SMSs (the default)')
+	parser.add_argument('-C', '--carrier', metavar='NAME',
+			help="Force the carrier to be this (``meteor'', ``o2'' or ``three''")
+	parser.add_argument('-m', '--message', metavar='STRING', 
+			help="Don't wait for STDIN, send this message")
+	parser.add_argument('-v', '--verbose', action='count')
+	parser.add_argument('--version', action='version',
+		version='%(prog)s ' + __version__)
+	return parser
+
+def signal_handler(signum, frame):
+	print("\nokay, I'm outta here...")
+	sys.exit(0)
+
+class Account(object):
+	def __init__(self, username, password):
+		self.username = username
+		self.password = password
+		self.cj = cookielib.MozillaCookieJar(__cookie_file__)
+		urllib2.install_opener(urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cj)))
+
+	def login(self):
+		print("Logging in:"),
+		# Valid cookies found in cookie file, no need to login
+		if os.path.isfile(__cookie_file__):
+			self.cj.load()
+			for c in self.cj:
+				if c.name in self.req_cookies.values():
+					print("(using existing session)"),
+					return True
+
+		response = urlopen(self.login_url, urllib.urlencode(self.login_form_data))
+		if self.loggedin_url in response.geturl():
+			self.save_cookies()
+			return True
+
+	def save_cookies(self):
+		# Adjust session cookie so not discarded upon save and load
+		for c in self.cj:
+			if c.name == self.req_cookies['login']: login_cookie = c
+			if c.name == self.req_cookies['session']: session_cookie = c
+		session_cookie.discard = False
+		session_cookie.expires = login_cookie.expires
+		self.cj.save()
+
+class MeteorAccount(Account):
+	def __init__(self, username, password):
+		Account.__init__(self, username, password)
+
+		self.req_cookies = {'login' : "MyMeteorCMS-cookie",
+												'session' : "JSESSIONID",}
+		self.login_url = 'https://www.mymeteor.ie/go/mymeteor-login-manager'
+		self.loggedin_url = 'https://www.mymeteor.ie/postpaylanding'
+		self.login_form_data = {'username': self.username,
+														'userpass': self.password,
+														'login': '',
+														'returnTo': '/',}
+
+	def get_texts_remaining(self):
+		if 'texts_remaining' in self.__dict__.keys():
+			return self.texts_remaining
+
+		url = 'https://www.mymeteor.ie/go/freewebtext'
+		pat = r'Free web texts left <input type="text" id="numfreesmstext" value="(\d+)" disabled size=2>'
+
+		response = urlopen(url)
+		match = re.search(pat, response.read())
+		self.texts_remaining = int(match.group(1) if match else -1)
+		return self.texts_remaining
+
+	def send_message(self, recipient, message):
+		url = 'https://www.mymeteor.ie/mymeteorapi/index.cfm'
+		pat = r'showEl\("sentTrue"\)'
+
+		# Add recipient
+		data = {'event' : 'smsAjax',
+						'func' : 'addEnteredMsisdns',
+						'ajaxRequest': 'addEnteredMSISDNs',
+						'remove' : '-',
+						'add' : '0|' + recipient,}
+		urlopen(url + '?' + urllib.urlencode(data))
+
+		# Add message
+		data = {'event' : 'smsAjax',
+						'func' : 'sendSMS',
+						'ajaxRequest' : 'sendSMS',
+						'messageText' : message,}
+
+		response = urlopen(url + '?' + urllib.urlencode(data))
+		if re.search(pat, response.read()): return True
+
+if __name__ == "__main__":
+    main()
