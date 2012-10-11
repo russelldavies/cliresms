@@ -174,7 +174,7 @@ def send_message(recipient, message):
 	account_type = { 'meteor': MeteorAccount,
 							#'o2': O2Account,
 							#'vodafone': VodafoneAccount,
-							#'three': ThreeAccount,
+							'three': ThreeAccount,
 						}.get(carrier,None)
 	if not account_type:
 		print("Invalid carrier. Qutting...")
@@ -295,6 +295,38 @@ class MeteorAccount(Account):
 						'messageText' : message,}
 
 		response = urlopen(url + '?' + urllib.urlencode(data))
+		if re.search(pat, response.read()): return True
+
+class ThreeAccount(Account):
+	def __init__(self, username, password):
+		Account.__init__(self, username, password)
+
+		self.req_cookies = {'login' : "CAKEPHP",
+												'session' : "AWSELB",}
+		self.login_url = 'https://webtexts.three.ie/webtext/users/login'
+		self.loggedin_url = 'https://webtexts.three.ie/webtext/messages/send'
+		self.login_form_data = {'data[User][telephoneNo]' : self.username,
+														'data[User][pin]' : self.password}
+
+	def get_texts_remaining(self):
+		if 'texts_remaining' in self.__dict__.keys():
+			return self.texts_remaining
+
+		url = self.loggedin_url
+		pat = r'Remaining texts: <\/span><br\/>(\d+) \(of \d+\)'
+
+		response = urlopen(url)
+		match = re.search(pat, response.read())
+		self.texts_remaining = int(match.group(1) if match else -1)
+		return self.texts_remaining
+
+	def send_message(self, recipient, message):
+		url = self.loggedin_url
+		pat = r'Message sent'
+		data = {'data[Message][message]' : message,
+						'data[Message][recipients_individual]' : recipient, }
+
+		response = urlopen(url, urllib.urlencode(data))
 		if re.search(pat, response.read()): return True
 
 if __name__ == "__main__":
