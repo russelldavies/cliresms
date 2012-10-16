@@ -38,16 +38,13 @@ def main():
 	# Read supplied conf file otherwise try to load default conf file (if exists)
 	global conf_file
 	if args.conf_file:
-		read_config(args.conf_file)
-		#args.conf_file.close()
 		conf_file = args.conf_file
 	else:
 		try:
-			#with open(__conf_file__) as f:
-			#	read_config(f)
 			conf_file = open(__conf_file__, 'r+')
-		except IOError:
-			pass
+		except IOError, err:
+			print(str(err))
+	if conf_file: read_config(conf_file)
 	
 	# Override any conf file loaded values with cli args
 	global username, password, carrier, split
@@ -72,6 +69,7 @@ def main():
 
 	if not split:
 		split = args.split_messages
+
 	message = get_message(args.message)
 
 	# Build a list of numbers from aliases
