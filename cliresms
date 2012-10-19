@@ -2,11 +2,28 @@
 
 # Copyright 2012 Russell Davies. Licensed under the Apache License, v2.0.
 
-import urllib, urllib2, cookielib
-from urllib2 import urlopen, Request, URLError, HTTPError
-import os, signal, sys, argparse, re, getpass
-import time, datetime
+from __future__ import print_function
+import argparse
+try:
+	from http import cookiejar
+except ImportError:
+	import cookielib as cookiejar
+import datetime
+import getpass
 import json
+import os
+import re
+import signal
+import sys
+import time
+try:
+	from urllib.parse import urlencode
+	from urllib.request import urlopen, build_opener, install_opener, Request, HTTPCookieProcessor
+	from urllib.error import URLError, HTTPError
+except ImportError:
+	from urllib import urlencode
+	from urllib2 import urlopen, build_opener, install_opener, Request, HTTPCookieProcessor
+	from urllib2 import URLError, HTTPError
 
 __version__ = '0.1'
 # Default conf file is in ~/.cliresms.conf
@@ -32,7 +49,7 @@ def main():
 		# Exit on non-existent option supplied config file otherwise parse cli args
 		args = cli_parser.parse_args()
 	except IOError as err:
-		print(str(err))
+		print(err)
 		sys.exit(err.errno)
 
 	# Read supplied conf file otherwise try to load default conf file (if exists)
@@ -42,8 +59,8 @@ def main():
 	else:
 		try:
 			conf_file = open(__conf_file__, 'r+')
-		except IOError, err:
-			print(str(err))
+		except IOError as err:
+			print(err)
 	if conf_file: read_config(conf_file)
 	
 	# Override any conf file loaded values with cli args
@@ -80,10 +97,10 @@ def main():
 		for r in recipients:
 			for m in message:
 				send_message(r, m)
-	except HTTPError, e:
+	except HTTPError as e:
 		print("The server couldn't fulfill the request.")
 		print("Error code: ", e.code)
-	except URLError, e:
+	except URLError as e:
 		print("Could not contact server, possible connectivity problem.")
 		print("Reason: ", e.reason)
 	
@@ -181,16 +198,21 @@ def send_message(recipient, message):
 		sys.exit(1)
 
 	account = account_type(username, password)
-	if account.login(): print("Logged in")
+	if account.login():
+		print("Logged in")
+	else:
+		print("Could not login, quitting...")
+		sys.exit(1)
 	if account.get_texts_remaining() < 0:
-		print("Site under load, unable to send message.")
+		print("You don't have any more texts remaining.")
 		sys.exit(1)
 
 	# Send message
-	print("Sending message..."),
+	print("Sending message...", end='')
+	sys.stdout.flush()
 	if account.send_message(recipient, message):
 		account.texts_remaining -= 1
-		print("Message sent. %s texts remaining." % account.texts_remaining)
+		print("Message sent, %s texts remaining." % account.texts_remaining)
 		return True
 
 def setup_parser():
@@ -224,23 +246,29 @@ class Account(object):
 	def __init__(self, username, password):
 		self.username = username
 		self.password = password
-		self.cj = cookielib.MozillaCookieJar(__cookie_file__)
-		urllib2.install_opener(urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cj)))
+		self.cj = cookiejar.MozillaCookieJar(__cookie_file__)
+
+		opener = build_opener(HTTPCookieProcessor(self.cj))
+		install_opener(opener)
 
 	def login(self, request=None):
-		print("Logging in:"),
+		print("Logging in...", end='')
+		sys.stdout.flush()
 		# Valid cookies found in cookie file, no need to login
 		if os.path.isfile(__cookie_file__):
 			self.cj.load()
 			for c in self.cj:
 				if c.name in self.req_cookies.values():
-					print("(using existing session)"),
+					print("(using existing session)", end=' ')
+					sys.stdout.flush()
 					return True
 
 		if request:
 			response = urlopen(request)
 		else:
-			response = urlopen(self.login_url, urllib.urlencode(self.login_form_data))
+			data = urlencode(self.login_form_data).encode('utf-8')
+			response = urlopen(self.login_url, data)
+
 		if self.loggedin_url in response.geturl():
 			self.save_cookies()
 			return True
@@ -256,7 +284,7 @@ class Account(object):
 
 class MeteorAccount(Account):
 	def __init__(self, username, password):
-		Account.__init__(self, username, password)
+		super(MeteorAccount, self).__init__(username, password)
 
 		self.req_cookies = {'login' : "MyMeteorCMS-cookie",
 												'session' : "JSESSIONID",}
@@ -268,14 +296,14 @@ class MeteorAccount(Account):
 														'returnTo': '/',}
 
 	def get_texts_remaining(self):
-		if 'texts_remaining' in self.__dict__.keys():
+		if hasattr(self, 'texts_remaining'):
 			return self.texts_remaining
 
 		url = 'https://www.mymeteor.ie/go/freewebtext'
 		pat = r'Free web texts left <input type="text" id="numfreesmstext" value="(\d+)" disabled size=2>'
 
 		response = urlopen(url)
-		match = re.search(pat, response.read())
+		match = re.search(pat, response.read().decode('utf-8'))
 		self.texts_remaining = int(match.group(1) if match else -1)
 		return self.texts_remaining
 
@@ -289,20 +317,21 @@ class MeteorAccount(Account):
 						'ajaxRequest': 'addEnteredMSISDNs',
 						'remove' : '-',
 						'add' : '0|' + recipient,}
-		urlopen(url + '?' + urllib.urlencode(data))
+		params = urlencode(data)#.encode('utf-8')
+		urlopen(url + '?' + params)
 
 		# Add message
 		data = {'event' : 'smsAjax',
 						'func' : 'sendSMS',
 						'ajaxRequest' : 'sendSMS',
 						'messageText' : message,}
-
-		response = urlopen(url + '?' + urllib.urlencode(data))
-		if re.search(pat, response.read()): return True
+		params = urlencode(data)#.encode('utf-8')
+		response = urlopen(url + '?' + params)
+		if re.search(pat, response.read().decode('utf-8')): return True
 
 class ThreeAccount(Account):
 	def __init__(self, username, password):
-		Account.__init__(self, username, password)
+		super(ThreeAccount, self).__init__(username, password)
 
 		self.req_cookies = {'login' : "CAKEPHP",
 												'session' : "AWSELB",}
@@ -312,14 +341,14 @@ class ThreeAccount(Account):
 														'data[User][pin]' : self.password}
 
 	def get_texts_remaining(self):
-		if 'texts_remaining' in self.__dict__.keys():
+		if hasattr(self, 'texts_remaining'):
 			return self.texts_remaining
 
 		url = self.loggedin_url
 		pat = r'Remaining texts: <\/span><br\/>(\d+) \(of \d+\)'
 
 		response = urlopen(url)
-		match = re.search(pat, response.read())
+		match = re.search(pat, response.read().decode('utf-8'))
 		self.texts_remaining = int(match.group(1) if match else -1)
 		return self.texts_remaining
 
@@ -329,12 +358,14 @@ class ThreeAccount(Account):
 		data = {'data[Message][message]' : message,
 						'data[Message][recipients_individual]' : recipient, }
 
-		response = urlopen(url, urllib.urlencode(data))
-		if re.search(pat, response.read()): return True
+		data = urlencode(data).encode('utf-8')
+		response = urlopen(url, data)
+		if re.search(pat, response.read().decode('utf-8')):
+			return True
 
 class O2Account(Account):
 	def __init__(self, username, account):
-		Account.__init__(self, username, password)
+		super(O2Account, self).__init__(username, password)
 
 		self.req_cookies = {'login' : "iPlanetDirectoryPro",}
 		self.login_url = "https://www.o2online.ie/amserver/UI/Login"
@@ -347,7 +378,8 @@ class O2Account(Account):
 														'IDToken2' : self.password, }
 
 	def login(self):
-		request = urllib2.Request(self.login_url, urllib.urlencode(self.login_form_data))
+		data = urlencode(self.login_form_data).encode('utf-8')
+		request = Request(self.login_url, data)
 		request.add_header('Referer', self.loggedin_url)
 		if Account.login(self, request):
 			return self.find_sid()
@@ -357,21 +389,22 @@ class O2Account(Account):
 		pat = r'o2om_smscenter_new.osp\?MsgContentID=-1&SID=_&SID=(\w+)'
 
 		response = urlopen(url)
-		match = re.search(pat, response.read())
+		match = re.search(pat, response.read().decode('utf-8'))
 		if match:
 			self.sid = match.group(1)
 			return True
 
 	def get_texts_remaining(self):
-		if 'texts_remaining' in self.__dict__.keys():
+		if hasattr(self, 'texts_remaining'):
 			return self.texts_remaining
 
 		#url = "http://messaging.o2online.ie/o2om_smscenter_new.osp"
 		#pat = r'id="spn_WebtextFree">(\d+)<\/span> free texts'
 		#data = {'MsgContentID' : '-1',
 		#				'SID' : self.sid, }
-		#response = urlopen(url, urllib.urlencode(data))
-		#match = re.search(pat, response.read())
+		# data = urlencode(data).encode('utf-8')
+		#response = urlopen(url, data)
+		#match = re.search(pat, response.read().decode('utf-8'))
 		#self.texts_remaining = int(match.group(1) if match else -1)
 		#return self.texts_remaining
 
@@ -379,11 +412,12 @@ class O2Account(Account):
 		data = {'SID' : self.sid,
 						'SMSText' : 'text',
 						'FID' : '6406',}
-		request = urllib2.Request(url, urllib.urlencode(data))
+		data = urlencode(data).encode('utf-8')
+		request = Request(url, data)
 		request.add_header('Referer', request.get_origin_req_host())
 		response = urlopen(request)
 		try:
-			content = self.parse_json(response.read())
+			content = self.parse_json(response.read().decode('utf-8'))
 		except ValueError:
 			content = None
 		self.texts_remaining = content['freeMessageCount'] if content else -1
@@ -395,10 +429,11 @@ class O2Account(Account):
 						'MsgContentID' : '-1', 
 						'SMSTo' : recipient,
 						'SMSText' : message, }
-		request = urllib2.Request(url, urllib.urlencode(data))
+		data = urlencode(data).encode('utf-8')
+		request = Request(url, data)
 		request.add_header('Referer', request.get_origin_req_host())
 		response = urlopen(request)
-		content = self.parse_json(response.read())
+		content = self.parse_json(response.read().decode('utf-8'))
 		return content['isSuccess']
 
 	def save_cookies(self):
