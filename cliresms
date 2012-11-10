@@ -203,8 +203,11 @@ def send_message(recipient, message):
 	else:
 		print("Could not login, quitting...")
 		sys.exit(1)
-	if account.get_texts_remaining() < 0:
+	if account.get_texts_remaining() == 0:
 		print("You don't have any more texts remaining.")
+		sys.exit(1)
+	elif account.get_texts_remaining() < 0:
+		print("Site inaccessible. Try again later.")
 		sys.exit(1)
 
 	# Send message
