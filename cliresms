@@ -27,8 +27,8 @@ except ImportError:
 
 __version__ = '0.1'
 # Default conf file is in ~/.cliresms.conf
-__conf_file__ = os.path.expanduser("~") + '/.cliresms.conf'
-__cookie_file__ = os.path.expanduser("~") + '/.cliresms.cookie'
+__conf_file__ = os.path.join(os.path.expanduser("~"), '.cliresms.conf')
+__cookie_file__ = os.path.join(os.path.expanduser("~"), '.cliresms.cookie')
 
 username = None
 password = None
