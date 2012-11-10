@@ -1,0 +1,23 @@
+# cliresms(1) completion of aliases
+# Mostly ripped from moosic completion.
+# Just put in /etc/bash_completion.d and restart bash
+# You need http://freshmeat.net/projects/bashcompletion/
+# 
+# Copyright 2003 "Etienne PIERRE" <etienne@tuxfamily.org>
+# Copyright 2004 "Daniel Pearson" <daniel@nanoo.org>
+# Copyright 2005 "Ivan Kelly" <ivan@ivankelly.net>
+# Copyright 2006 "David McNamara" <http://www.mackers.com/>
+# Copyright 2009 "James McDermott" <http://www.skynet.ie/~jmmcd/>
+#
+have cliresms &&
+_cliresms() {
+	COMPREPLY=()
+	cur=${COMP_WORDS[COMP_CWORD]}
+	prev=${COMP_WORDS[COMP_CWORD-1]}
+
+	names=`cat ~/.cliresms.conf | awk '/^alias/ { print $2 }'`
+
+	COMPREPLY=($(compgen -W "$names" | grep ^$cur))
+	return 0
+}
+[ "$have" ] && complete -F _cliresms -o default cliresms
