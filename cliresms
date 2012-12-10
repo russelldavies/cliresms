@@ -11,6 +11,7 @@ except ImportError:
 import datetime
 import getpass
 import json
+import logging
 import os
 import re
 import signal
@@ -29,6 +30,8 @@ __version__ = '0.1'
 # Default conf file is in ~/.cliresms.conf
 __conf_file__ = os.path.join(os.path.expanduser("~"), '.cliresms.conf')
 __cookie_file__ = os.path.join(os.path.expanduser("~"), '.cliresms.cookie')
+
+log = logging.getLogger()
 
 username = None
 password = None
@@ -52,6 +55,10 @@ def main():
         print(err)
         sys.exit(err.errno)
 
+	loglevel = logging.WARN - (args.verbose * 10)
+	logging.basicConfig(level=loglevel)
+
+
     # Read supplied conf file otherwise try to load default conf file (if exists)
     global conf_file
     if args.conf_file:
@@ -64,6 +71,8 @@ def main():
     if conf_file:
         read_config(conf_file)
     
+
+	
     # Override any conf file loaded values with cli args
     global username, password, carrier, split
     if args.carrier:
@@ -248,7 +257,7 @@ def setup_parser():
             help="Force the carrier to be this (``meteor'', ``o2'' or ``three''")
     parser.add_argument('-m', '--message', metavar='STRING', 
             help="Don't wait for STDIN, send this message")
-    parser.add_argument('-v', '--verbose', action='count')
+	parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('--version', action='version',
         version='%(prog)s ' + __version__)
     return parser
