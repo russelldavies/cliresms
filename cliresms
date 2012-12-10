@@ -125,6 +125,8 @@ def read_config(file):
     global username, password, carrier, split
 
     for line in map(lambda s: s.strip(), file.readlines()):
+	    if line.startswith('#'):
+	        continue
         if 'username' in line:
             username = line.split()[-1]
             next
