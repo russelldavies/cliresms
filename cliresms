@@ -138,8 +138,13 @@ def read_config(file):
             split = True
             next
         if 'alias' in line:
+		    try:
             matches = re.search(r'^\s*alias\s*([\w\.\-\_]*)\s*([\d\s\+]*)\s*$', line)
             aliases[matches.group(1)] = matches.group(2).split()
+		    except AttributeError:
+		        log.exception("Problem parsing line:\n%s", line)
+		        raise
+			    
 
 def get_message(message=None):
     if not message:
