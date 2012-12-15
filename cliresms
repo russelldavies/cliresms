@@ -55,8 +55,8 @@ def main():
         print(err)
         sys.exit(err.errno)
 
-	loglevel = logging.WARN - (args.verbose * 10)
-	logging.basicConfig(level=loglevel)
+    loglevel = logging.WARN - (args.verbose * 10)
+    logging.basicConfig(level=loglevel)
 
 
     # Read supplied conf file otherwise try to load default conf file (if exists)
@@ -72,7 +72,7 @@ def main():
         read_config(conf_file)
     
 
-	
+    
     # Override any conf file loaded values with cli args
     global username, password, carrier, split
     if args.carrier:
@@ -125,28 +125,35 @@ def read_config(file):
     global username, password, carrier, split
 
     for line in map(lambda s: s.strip(), file.readlines()):
-	    if line.startswith('#'):
-	        continue
-        if 'username' in line:
+        log.debug('Parsing line:\n%s', line)
+        if not line:    # We are handling an empty line
+            continue
+        if line.startswith('#'):
+            continue
+        elif 'username' in line:
             username = line.split()[-1]
             next
-        if 'password' in line:
+        elif 'password' in line:
             password = line.split()[-1]
             next
-        if 'carrier' in line:
+        elif 'carrier' in line:
             carrier = line.split()[-1]
             next
-        if 'nosplit' in line:
+        elif 'nosplit' in line:
             split = True
             next
-        if 'alias' in line:
-		    try:
-            matches = re.search(r'^\s*alias\s*([\w\.\-\_]*)\s*([\d\s\+]*)\s*$', line)
-            aliases[matches.group(1)] = matches.group(2).split()
-		    except AttributeError:
-		        log.exception("Problem parsing line:\n%s", line)
-		        raise
-			    
+        elif 'alias' in line:
+            try:
+                # Matches a line in the form: alias name +1234 5789
+                # There can be variable whitespace between the tokens and
+                # the numbers can be in international or local form
+                matches = re.search(r'^\s*alias\s*([\w\.\-\_]*)\s*([\d\s\+]*)\s*$', line)
+                aliases[matches.group(1)] = matches.group(2).split()
+            except AttributeError:
+                log.exception("Problem parsing line:\n%s", line)
+                raise
+        else:
+            log.error('Could not parse line:\n%s', line)        
 
 def get_message(message=None):
     if not message:
@@ -264,7 +271,7 @@ def setup_parser():
             help="Force the carrier to be this (``meteor'', ``o2'' or ``three''")
     parser.add_argument('-m', '--message', metavar='STRING', 
             help="Don't wait for STDIN, send this message")
-	parser.add_argument('-v', '--verbose', action='count', default=0)
+    parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('--version', action='version',
         version='%(prog)s ' + __version__)
     return parser
