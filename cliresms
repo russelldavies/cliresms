@@ -389,7 +389,9 @@ class MeteorAccount(Account):
         pat = r'Free web texts left <input type="text" id="numfreesmstext" value="(\d+)" disabled size=2>'
 
         response = urlopen(url)
-        match = re.search(pat, response.read().decode('utf-8'))
+        response_data = response.read().decode('utf-8')
+        match = re.search(pat, response_data)
+        log.debug('Texts remaining page:\n%s', response_data)
         self.texts_remaining = int(match.group(1) if match else -1)
         return self.texts_remaining
 
