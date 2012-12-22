@@ -326,7 +326,12 @@ class Account(object):
         sys.stdout.flush()
         # Valid cookies found in cookie file, no need to login
         if os.path.isfile(__cookie_file__):
-            self.cj.load()
+            try:
+                self.cj.load()
+            except cookiejar.LoadError:
+                log.exception('Error loading cookie file, try to delete '
+                    '%s', __cookie_file__)
+                raise
             for c in self.cj:
                 if c.name in self.cookies.values():
                     print("(using existing session)", end=' ')
