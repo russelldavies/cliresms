@@ -194,9 +194,17 @@ def get_message(message=None):
     length = 160
     if len(message) > length and split:
         # Split message into multiple parts
-        return [message[i:i+length] for i in range(0, len(message), length)]
+        messages = [message[i:i+length].strip()
+                    for i in range(0, len(message)-1, length)]
     else:
-        return [message[:length]]
+        log.warning('Message is longer than %d: %d, sending only %d '
+            'chars', length, len(message), length)
+        messages = [message[:length]]
+
+    log.info('Messages (%d): %s', len(message), messages)
+    print ("Sending %d messages (%d)" % (len(messages), len(message)))
+    return messages
+
 
 def process_recipients(arg_recipients):
     for recipient in arg_recipients:
