@@ -296,7 +296,9 @@ def setup_parser():
     parser.add_argument('-c', '--config', metavar='FILE', type=argparse.FileType('r+'),
             dest='conf_file', #default=__conf_file__, 
             help='Use this configuration file (defaults to ~/.cliresms.conf)')
-    parser.add_argument('-s', '--split-messages', action='store_true', help='Allow message to be split into multiple SMSs (the default)')
+    parser.add_argument('-s', '--split-messages', action='store_true',
+            help='Allow message to be split into multiple SMSs (the '
+            'default)', default=True)
     parser.add_argument('-C', '--carrier', metavar='NAME',
             help="Force the carrier to be this (``meteor'', ``o2'' or ``three''")
     parser.add_argument('-m', '--message', metavar='STRING', 
