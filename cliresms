@@ -97,14 +97,28 @@ def main():
     if not split:
         split = args.split_messages
 
-
     # Build a list of numbers from aliases
-    process_recipients(args.recipients)
-    if len(recipients) < 1:
-        print("No recipients specified, quitting...")
+    try:
+        process_recipients(args.recipients)
+    except ValueError:
         sys.exit(1)
 
     message = get_message(args.message)
+
+    # Send SMS
+    try:
+        for r in recipients:
+            for m in message:
+                send_message(r, m)
+    except HTTPError as e:
+        print("The server couldn't fulfill the request.")
+        print("Error code: ", e.code)
+    except URLError as e:
+        print("Could not contact server, possible connectivity problem.")
+        print("Reason: ", e.reason)
+    
+    # Save any unknown numbers to config file
+    save_aliases()
 
     # Send SMS
     try:
@@ -216,7 +230,11 @@ def process_recipients(arg_recipients):
             if re.search(r'\+?\d', recipient):
                 recipients.append(recipient)
             else:
-                print("Unknown alias: %s" % recipient)
+                log.error('Alias %s unknown', recipient)
+                log.error('Known aliases: %s',
+                        ', '.join(sorted(aliases.keys(),
+                        key=lambda x: x.lower())))
+                raise ValueError("Unknown alias: %s" % recipient)
 
 def save_aliases():
     if not conf_file: return
