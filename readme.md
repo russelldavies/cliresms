@@ -50,7 +50,7 @@ Options
 
 Configuration File
 ------------------
-Configuration is in the file *~/.cliresms/config* or can be overwritten with the `-c` / `--config-file` command line option.
+Configuration is in the file *~/.cliresms.conf* or can be overwritten with the `-c` / `--config-file` command line option.
 
 Values in this file are stored as one per line and take the same name and format as their command line equivalents.
 
