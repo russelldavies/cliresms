@@ -88,10 +88,14 @@ def main():
     if not split:
         split = args.split_messages
 
-    message = get_message(args.message)
 
     # Build a list of numbers from aliases
     process_recipients(args.recipients)
+    if len(recipients) < 1:
+        print("No recipients specified, quitting...")
+        sys.exit(1)
+
+    message = get_message(args.message)
 
     # Send SMS
     try:
