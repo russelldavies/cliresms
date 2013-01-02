@@ -99,7 +99,7 @@ def main():
 
     # Send SMS
     try:
-        for r in recipients:
+        for r in recipients[:]:
             for m in message:
                 send_message(r, m)
     except HTTPError as e:
@@ -203,6 +203,13 @@ def send_message(recipient, message):
         sys.exit(1)
 
     account = account_type(username, password)
+    try:
+        recipient = account.validate_number(recipient)
+    except ValueError as err:
+        print(err)
+        recipients.remove(recipient)
+        return
+
     if account.login():
         print("Logged in")
     else:
@@ -291,6 +298,16 @@ class Account(object):
         login_cookie.expires = unix_time
         self.cj.save()
 
+    def validate_number(self, recipient):
+        # Remove whitespace, hyphens and dots
+        recipient = re.sub(r'[\s\-\.]', '', recipient)
+
+        # Contains letters or other invalid characters
+        if re.search(r'[^\d\+]', recipient):
+            raise ValueError("Number contains invalid characters")
+
+        return recipient
+
 class MeteorAccount(Account):
     def __init__(self, username, password):
         super(MeteorAccount, self).__init__(username, password)
@@ -315,6 +332,17 @@ class MeteorAccount(Account):
         match = re.search(pat, response.read().decode('utf-8'))
         self.texts_remaining = int(match.group(1) if match else -1)
         return self.texts_remaining
+
+    def validate_number(self, recipient):
+        recipient = super(MeteorAccount, self).validate_number(recipient)
+
+        # Convert to national number format
+        recipient = re.sub(r'(\+353|00353)', '0', recipient)
+
+        # Valid Irish number
+        if re.search(r'^08[3567]\d{7}', recipient):
+            return recipient
+        raise ValueError("%s is not a valid Irish mobile number" % recipient)
 
     def send_message(self, recipient, message):
         url = 'https://www.mymeteor.ie/mymeteorapi/index.cfm'
