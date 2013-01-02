@@ -5,9 +5,9 @@
 from __future__ import print_function
 import argparse
 try:
-	from http import cookiejar
+    from http import cookiejar
 except ImportError:
-	import cookielib as cookiejar
+    import cookielib as cookiejar
 import datetime
 import getpass
 import json
@@ -17,13 +17,13 @@ import signal
 import sys
 import time
 try:
-	from urllib.parse import urlencode
-	from urllib.request import urlopen, build_opener, install_opener, Request, HTTPCookieProcessor
-	from urllib.error import URLError, HTTPError
+    from urllib.parse import urlencode
+    from urllib.request import urlopen, build_opener, install_opener, Request, HTTPCookieProcessor
+    from urllib.error import URLError, HTTPError
 except ImportError:
-	from urllib import urlencode
-	from urllib2 import urlopen, build_opener, install_opener, Request, HTTPCookieProcessor
-	from urllib2 import URLError, HTTPError
+    from urllib import urlencode
+    from urllib2 import urlopen, build_opener, install_opener, Request, HTTPCookieProcessor
+    from urllib2 import URLError, HTTPError
 
 __version__ = '0.1'
 # Default conf file is in ~/.cliresms.conf
@@ -40,439 +40,439 @@ recipients = []
 conf_file = None
 
 def main():
-	# Register signal handler to catch ctrl+c to gracefully quit
-	signal.signal(signal.SIGINT, signal_handler)
+    # Register signal handler to catch ctrl+c to gracefully quit
+    signal.signal(signal.SIGINT, signal_handler)
 
-	# Parse cli args
-	try:
-		cli_parser = setup_parser()
-		# Exit on non-existent option supplied config file otherwise parse cli args
-		args = cli_parser.parse_args()
-	except IOError as err:
-		print(err)
-		sys.exit(err.errno)
+    # Parse cli args
+    try:
+        cli_parser = setup_parser()
+        # Exit on non-existent option supplied config file otherwise parse cli args
+        args = cli_parser.parse_args()
+    except IOError as err:
+        print(err)
+        sys.exit(err.errno)
 
-	# Read supplied conf file otherwise try to load default conf file (if exists)
-	global conf_file
-	if args.conf_file:
-		conf_file = args.conf_file
-	else:
-		try:
-			conf_file = open(__conf_file__, 'r+')
-		except IOError as err:
-			print(err)
-	if conf_file: read_config(conf_file)
-	
-	# Override any conf file loaded values with cli args
-	global username, password, carrier, split
-	if args.carrier:
-		carrier = args.carrier
-	if not carrier:
-		print("You must specify a carrier. Qutting...")
-		sys.exit(1)
+    # Read supplied conf file otherwise try to load default conf file (if exists)
+    global conf_file
+    if args.conf_file:
+        conf_file = args.conf_file
+    else:
+        try:
+            conf_file = open(__conf_file__, 'r+')
+        except IOError as err:
+            print(err)
+    if conf_file: read_config(conf_file)
+    
+    # Override any conf file loaded values with cli args
+    global username, password, carrier, split
+    if args.carrier:
+        carrier = args.carrier
+    if not carrier:
+        print("You must specify a carrier. Qutting...")
+        sys.exit(1)
 
-	if args.username:
-		username = args.username
-	else:
-		if not username:
-			username = getpass.getuser()
-			print("Using login name: %s" % username)
+    if args.username:
+        username = args.username
+    else:
+        if not username:
+            username = getpass.getuser()
+            print("Using login name: %s" % username)
 
-	if args.password:
-		password = args.password
-	else:
-		if not password:
-			password = getpass.getpass()
+    if args.password:
+        password = args.password
+    else:
+        if not password:
+            password = getpass.getpass()
 
-	if not split:
-		split = args.split_messages
+    if not split:
+        split = args.split_messages
 
-	message = get_message(args.message)
+    message = get_message(args.message)
 
-	# Build a list of numbers from aliases
-	process_recipients(args.recipients)
+    # Build a list of numbers from aliases
+    process_recipients(args.recipients)
 
-	# Send SMS
-	try:
-		for r in recipients:
-			for m in message:
-				send_message(r, m)
-	except HTTPError as e:
-		print("The server couldn't fulfill the request.")
-		print("Error code: ", e.code)
-	except URLError as e:
-		print("Could not contact server, possible connectivity problem.")
-		print("Reason: ", e.reason)
-	
-	# Save any unknown numbers to config file
-	save_aliases()
+    # Send SMS
+    try:
+        for r in recipients:
+            for m in message:
+                send_message(r, m)
+    except HTTPError as e:
+        print("The server couldn't fulfill the request.")
+        print("Error code: ", e.code)
+    except URLError as e:
+        print("Could not contact server, possible connectivity problem.")
+        print("Reason: ", e.reason)
+    
+    # Save any unknown numbers to config file
+    save_aliases()
 
 def read_config(file):
-	global username, password, carrier, split
+    global username, password, carrier, split
 
-	for line in map(lambda s: s.strip(), file.readlines()):
-		if 'username' in line:
-			username = line.split()[-1]
-			next
-		if 'password' in line:
-			password = line.split()[-1]
-			next
-		if 'carrier' in line:
-			carrier = line.split()[-1]
-			next
-		if 'nosplit' in line:
-			split = True
-			next
-		if 'alias' in line:
-			matches = re.search(r'^\s*alias\s*([\w\.\-\_]*)\s*([\d\s\+]*)\s*$', line)
-			aliases[matches.group(1)] = matches.group(2).split()
+    for line in map(lambda s: s.strip(), file.readlines()):
+        if 'username' in line:
+            username = line.split()[-1]
+            next
+        if 'password' in line:
+            password = line.split()[-1]
+            next
+        if 'carrier' in line:
+            carrier = line.split()[-1]
+            next
+        if 'nosplit' in line:
+            split = True
+            next
+        if 'alias' in line:
+            matches = re.search(r'^\s*alias\s*([\w\.\-\_]*)\s*([\d\s\+]*)\s*$', line)
+            aliases[matches.group(1)] = matches.group(2).split()
 
 def get_message(message=None):
-	if not message:
-		# Prompt user for message text
-		print("Enter your message:")
-		input = []
-		while True:
-			line = sys.stdin.readline()
-			# Complete on EOF (ctrl-d) or '.' at start of a line
-			if not line or line == '.\n':
-				input[-1] = input[-1].rstrip()
-				break
-			input.append(line)
-		message = ''.join(input)
+    if not message:
+        # Prompt user for message text
+        print("Enter your message:")
+        input = []
+        while True:
+            line = sys.stdin.readline()
+            # Complete on EOF (ctrl-d) or '.' at start of a line
+            if not line or line == '.\n':
+                input[-1] = input[-1].rstrip()
+                break
+            input.append(line)
+        message = ''.join(input)
 
-	length = 160
-	if len(message) > length and split:
-		# Split message into multiple parts
-		return [message[i:i+length] for i in range(0, len(message), length)]
-	else:
-		return [message[:length]]
+    length = 160
+    if len(message) > length and split:
+        # Split message into multiple parts
+        return [message[i:i+length] for i in range(0, len(message), length)]
+    else:
+        return [message[:length]]
 
 def process_recipients(arg_recipients):
-	for recipient in arg_recipients:
-		if recipient in aliases:
-			# an alias contains a list of numbers so flatten out
-			[recipients.append(r) for r in aliases[recipient]]
-		else:
-			# recipient is a number not alias
-			if re.search(r'\+?\d', recipient):
-				recipients.append(recipient)
-			else:
-				print("Unknown alias: %s" % recipient)
+    for recipient in arg_recipients:
+        if recipient in aliases:
+            # an alias contains a list of numbers so flatten out
+            [recipients.append(r) for r in aliases[recipient]]
+        else:
+            # recipient is a number not alias
+            if re.search(r'\+?\d', recipient):
+                recipients.append(recipient)
+            else:
+                print("Unknown alias: %s" % recipient)
 
 def save_aliases():
-	if not conf_file: return
+    if not conf_file: return
 
-	new_aliases = {}
-	alias_nums = [num for sublist in aliases.values() for num in sublist]
-	for num in recipients:
-		if num in alias_nums:
-			continue
-		while True:
-			entered = raw_input("Create alias for %s with this name: " % num).strip()
-			if len(entered) < 1: break
-			if not entered.isalpha():
-				print("%s is an invalid alias name, no numbers allowed" % entered)
-				continue
-			if entered in aliases:
-				print("alias already exists")
-				continue
-			new_aliases[entered] = num
-			break
-	for name in new_aliases:
-		try:
-			conf_file.write("alias %s %s\n" % (name, new_aliases[name]))
-		except:
-			print("Could not write aliases to configuration file %s" % os.path.abspath(f.name))
+    new_aliases = {}
+    alias_nums = [num for sublist in aliases.values() for num in sublist]
+    for num in recipients:
+        if num in alias_nums:
+            continue
+        while True:
+            entered = raw_input("Create alias for %s with this name: " % num).strip()
+            if len(entered) < 1: break
+            if not entered.isalpha():
+                print("%s is an invalid alias name, no numbers allowed" % entered)
+                continue
+            if entered in aliases:
+                print("alias already exists")
+                continue
+            new_aliases[entered] = num
+            break
+    for name in new_aliases:
+        try:
+            conf_file.write("alias %s %s\n" % (name, new_aliases[name]))
+        except:
+            print("Could not write aliases to configuration file %s" % os.path.abspath(f.name))
 
 def send_message(recipient, message):
-	global username, password, carrier
+    global username, password, carrier
 
-	account_type = { 'meteor': MeteorAccount,
-							#'o2': O2Account,
-							#'vodafone': VodafoneAccount,
-							'three': ThreeAccount,
-						}.get(carrier,None)
-	if not account_type:
-		print("Invalid carrier. Qutting...")
-		sys.exit(1)
+    account_type = {'meteor': MeteorAccount,
+                    'o2': O2Account,
+                    'three': ThreeAccount,
+                    #'vodafone': VodafoneAccount,
+                    }.get(carrier,None)
+    if not account_type:
+        print("Invalid carrier. Qutting...")
+        sys.exit(1)
 
-	account = account_type(username, password)
-	if account.login():
-		print("Logged in")
-	else:
-		print("Could not login, quitting...")
-		sys.exit(1)
-	if account.get_texts_remaining() == 0:
-		print("You don't have any more texts remaining.")
-		sys.exit(1)
-	elif account.get_texts_remaining() < 0:
-		print("Site inaccessible. Try again later.")
-		sys.exit(1)
+    account = account_type(username, password)
+    if account.login():
+        print("Logged in")
+    else:
+        print("Could not login, quitting...")
+        sys.exit(1)
+    if account.get_texts_remaining() == 0:
+        print("You don't have any more texts remaining.")
+        sys.exit(1)
+    elif account.get_texts_remaining() < 0:
+        print("Site inaccessible. Try again later.")
+        sys.exit(1)
 
-	# Send message
-	print("Sending message...", end='')
-	sys.stdout.flush()
-	if account.send_message(recipient, message):
-		account.texts_remaining -= 1
-		print("Message sent, %s texts remaining." % account.texts_remaining)
-		return True
+    # Send message
+    print("Sending message...", end='')
+    sys.stdout.flush()
+    if account.send_message(recipient, message):
+        account.texts_remaining -= 1
+        print("Message sent, %s texts remaining." % account.texts_remaining)
+        return True
 
 def setup_parser():
-	parser = argparse.ArgumentParser(prog='cliresms',
-		description='Send webtexts from the command line')
-	parser.add_argument('recipients', metavar='<number|alias|group>',
-		nargs='+',
-		help='One or more numbers or entries in the config file')
-	parser.add_argument('-u', '--username', metavar='STRING', 
-			help='Use this username (defaults to unix username)')
-	parser.add_argument('-p', '--password', metavar='STRING', 
-			help='Use this password (if omitted, will prompt for password)')
-	parser.add_argument('-c', '--config', metavar='FILE', type=argparse.FileType('r+'),
-			dest='conf_file', #default=__conf_file__, 
-			help='Use this configuration file (defaults to ~/.cliresms.conf)')
-	parser.add_argument('-s', '--split-messages', action='store_true', help='Allow message to be split into multiple SMSs (the default)')
-	parser.add_argument('-C', '--carrier', metavar='NAME',
-			help="Force the carrier to be this (``meteor'', ``o2'' or ``three''")
-	parser.add_argument('-m', '--message', metavar='STRING', 
-			help="Don't wait for STDIN, send this message")
-	parser.add_argument('-v', '--verbose', action='count')
-	parser.add_argument('--version', action='version',
-		version='%(prog)s ' + __version__)
-	return parser
+    parser = argparse.ArgumentParser(prog='cliresms',
+        description='Send webtexts from the command line')
+    parser.add_argument('recipients', metavar='<number|alias|group>',
+        nargs='+',
+        help='One or more numbers or entries in the config file')
+    parser.add_argument('-u', '--username', metavar='STRING', 
+            help='Use this username (defaults to unix username)')
+    parser.add_argument('-p', '--password', metavar='STRING', 
+            help='Use this password (if omitted, will prompt for password)')
+    parser.add_argument('-c', '--config', metavar='FILE', type=argparse.FileType('r+'),
+            dest='conf_file', #default=__conf_file__, 
+            help='Use this configuration file (defaults to ~/.cliresms.conf)')
+    parser.add_argument('-s', '--split-messages', action='store_true', help='Allow message to be split into multiple SMSs (the default)')
+    parser.add_argument('-C', '--carrier', metavar='NAME',
+            help="Force the carrier to be this (``meteor'', ``o2'' or ``three''")
+    parser.add_argument('-m', '--message', metavar='STRING', 
+            help="Don't wait for STDIN, send this message")
+    parser.add_argument('-v', '--verbose', action='count')
+    parser.add_argument('--version', action='version',
+        version='%(prog)s ' + __version__)
+    return parser
 
 def signal_handler(signum, frame):
-	print("\nokay, I'm outta here...")
-	sys.exit(0)
+    print("\nokay, I'm outta here...")
+    sys.exit(0)
 
 class Account(object):
-	def __init__(self, username, password):
-		self.username = username
-		self.password = password
-		self.cj = cookiejar.MozillaCookieJar(__cookie_file__)
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
+        self.cj = cookiejar.MozillaCookieJar(__cookie_file__)
 
-		opener = build_opener(HTTPCookieProcessor(self.cj))
-		install_opener(opener)
+        opener = build_opener(HTTPCookieProcessor(self.cj))
+        install_opener(opener)
 
-	def login(self, request=None):
-		print("Logging in...", end='')
-		sys.stdout.flush()
-		# Valid cookies found in cookie file, no need to login
-		if os.path.isfile(__cookie_file__):
-			self.cj.load()
-			for c in self.cj:
-				if c.name in self.req_cookies.values():
-					print("(using existing session)", end=' ')
-					sys.stdout.flush()
-					return True
+    def login(self, request=None):
+        print("Logging in...", end='')
+        sys.stdout.flush()
+        # Valid cookies found in cookie file, no need to login
+        if os.path.isfile(__cookie_file__):
+            self.cj.load()
+            for c in self.cj:
+                if c.name in self.req_cookies.values():
+                    print("(using existing session)", end=' ')
+                    sys.stdout.flush()
+                    return True
 
-		if request:
-			response = urlopen(request)
-		else:
-			data = urlencode(self.login_form_data).encode('utf-8')
-			response = urlopen(self.login_url, data)
+        if request:
+            response = urlopen(request)
+        else:
+            data = urlencode(self.login_form_data).encode('utf-8')
+            response = urlopen(self.login_url, data)
 
-		if self.loggedin_url in response.geturl():
-			self.save_cookies()
-			return True
+        if self.loggedin_url in response.geturl():
+            self.save_cookies()
+            return True
 
-	def save_cookies(self):
-		# Adjust session cookie so not discarded upon save and load
-		for c in self.cj:
-			if c.name == self.req_cookies['login']: login_cookie = c
-			if c.name == self.req_cookies['session']: session_cookie = c
-		session_cookie.discard = False
-		session_cookie.expires = login_cookie.expires
-		self.cj.save()
+    def save_cookies(self):
+        # Adjust session cookie so not discarded upon save and load
+        for c in self.cj:
+            if c.name == self.req_cookies['login']: login_cookie = c
+            if c.name == self.req_cookies['session']: session_cookie = c
+        session_cookie.discard = False
+        session_cookie.expires = login_cookie.expires
+        self.cj.save()
 
 class MeteorAccount(Account):
-	def __init__(self, username, password):
-		super(MeteorAccount, self).__init__(username, password)
+    def __init__(self, username, password):
+        super(MeteorAccount, self).__init__(username, password)
 
-		self.req_cookies = {'login' : "MyMeteorCMS-cookie",
-												'session' : "JSESSIONID",}
-		self.login_url = 'https://www.mymeteor.ie/go/mymeteor-login-manager'
-		self.loggedin_url = 'https://www.mymeteor.ie/postpaylanding'
-		self.login_form_data = {'username': self.username,
-														'userpass': self.password,
-														'login': '',
-														'returnTo': '/',}
+        self.req_cookies = {'login': "MyMeteorCMS-cookie",
+                            'session': "JSESSIONID",}
+        self.login_url = 'https://www.mymeteor.ie/go/mymeteor-login-manager'
+        self.loggedin_url = 'https://www.mymeteor.ie/postpaylanding'
+        self.login_form_data = {'username': self.username,
+                                'userpass': self.password,
+                                'login': '',
+                                'returnTo': '/',}
 
-	def get_texts_remaining(self):
-		if hasattr(self, 'texts_remaining'):
-			return self.texts_remaining
+    def get_texts_remaining(self):
+        if hasattr(self, 'texts_remaining'):
+            return self.texts_remaining
 
-		url = 'https://www.mymeteor.ie/go/freewebtext'
-		pat = r'Free web texts left <input type="text" id="numfreesmstext" value="(\d+)" disabled size=2>'
+        url = 'https://www.mymeteor.ie/go/freewebtext'
+        pat = r'Free web texts left <input type="text" id="numfreesmstext" value="(\d+)" disabled size=2>'
 
-		response = urlopen(url)
-		match = re.search(pat, response.read().decode('utf-8'))
-		self.texts_remaining = int(match.group(1) if match else -1)
-		return self.texts_remaining
+        response = urlopen(url)
+        match = re.search(pat, response.read().decode('utf-8'))
+        self.texts_remaining = int(match.group(1) if match else -1)
+        return self.texts_remaining
 
-	def send_message(self, recipient, message):
-		url = 'https://www.mymeteor.ie/mymeteorapi/index.cfm'
-		pat = r'showEl\("sentTrue"\)'
+    def send_message(self, recipient, message):
+        url = 'https://www.mymeteor.ie/mymeteorapi/index.cfm'
+        pat = r'showEl\("sentTrue"\)'
 
-		# Add recipient
-		data = {'event' : 'smsAjax',
-						'func' : 'addEnteredMsisdns',
-						'ajaxRequest': 'addEnteredMSISDNs',
-						'remove' : '-',
-						'add' : '0|' + recipient,}
-		params = urlencode(data)#.encode('utf-8')
-		urlopen(url + '?' + params)
+        # Add recipient
+        data = {'event': 'smsAjax',
+                'func': 'addEnteredMsisdns',
+                'ajaxRequest': 'addEnteredMSISDNs',
+                'remove': '-',
+                'add': '0|' + recipient,}
+        params = urlencode(data)#.encode('utf-8')
+        urlopen(url + '?' + params)
 
-		# Add message
-		data = {'event' : 'smsAjax',
-						'func' : 'sendSMS',
-						'ajaxRequest' : 'sendSMS',
-						'messageText' : message,}
-		params = urlencode(data)#.encode('utf-8')
-		response = urlopen(url + '?' + params)
-		if re.search(pat, response.read().decode('utf-8')): return True
+        # Add message
+        data = {'event': 'smsAjax',
+                'func': 'sendSMS',
+                'ajaxRequest': 'sendSMS',
+                'messageText': message,}
+        params = urlencode(data)#.encode('utf-8')
+        response = urlopen(url + '?' + params)
+        if re.search(pat, response.read().decode('utf-8')): return True
 
 class ThreeAccount(Account):
-	def __init__(self, username, password):
-		super(ThreeAccount, self).__init__(username, password)
+    def __init__(self, username, password):
+        super(ThreeAccount, self).__init__(username, password)
 
-		self.req_cookies = {'login' : "CAKEPHP",
-												'session' : "AWSELB",}
-		self.login_url = 'https://webtexts.three.ie/webtext/users/login'
-		self.loggedin_url = 'https://webtexts.three.ie/webtext/messages/send'
-		self.login_form_data = {'data[User][telephoneNo]' : self.username,
-														'data[User][pin]' : self.password}
+        self.req_cookies = {'login': "CAKEPHP",
+                            'session': "AWSELB",}
+        self.login_url = 'https://webtexts.three.ie/webtext/users/login'
+        self.loggedin_url = 'https://webtexts.three.ie/webtext/messages/send'
+        self.login_form_data = {'data[User][telephoneNo]': self.username,
+                                'data[User][pin]': self.password}
 
-	def get_texts_remaining(self):
-		if hasattr(self, 'texts_remaining'):
-			return self.texts_remaining
+    def get_texts_remaining(self):
+        if hasattr(self, 'texts_remaining'):
+            return self.texts_remaining
 
-		url = self.loggedin_url
-		pat = r'Remaining texts: <\/span><br\/>(\d+) \(of \d+\)'
+        url = self.loggedin_url
+        pat = r'Remaining texts: <\/span><br\/>(\d+) \(of \d+\)'
 
-		response = urlopen(url)
-		match = re.search(pat, response.read().decode('utf-8'))
-		self.texts_remaining = int(match.group(1) if match else -1)
-		return self.texts_remaining
+        response = urlopen(url)
+        match = re.search(pat, response.read().decode('utf-8'))
+        self.texts_remaining = int(match.group(1) if match else -1)
+        return self.texts_remaining
 
-	def send_message(self, recipient, message):
-		url = self.loggedin_url
-		pat = r'Message sent'
-		data = {'data[Message][message]' : message,
-						'data[Message][recipients_individual]' : recipient, }
+    def send_message(self, recipient, message):
+        url = self.loggedin_url
+        pat = r'Message sent'
+        data = {'data[Message][message]': message,
+                'data[Message][recipients_individual]': recipient, }
 
-		data = urlencode(data).encode('utf-8')
-		response = urlopen(url, data)
-		if re.search(pat, response.read().decode('utf-8')):
-			return True
+        data = urlencode(data).encode('utf-8')
+        response = urlopen(url, data)
+        if re.search(pat, response.read().decode('utf-8')):
+            return True
 
 class O2Account(Account):
-	def __init__(self, username, account):
-		super(O2Account, self).__init__(username, password)
+    def __init__(self, username, account):
+        super(O2Account, self).__init__(username, password)
 
-		self.req_cookies = {'login' : "iPlanetDirectoryPro",}
-		self.login_url = "https://www.o2online.ie/amserver/UI/Login"
-		self.loggedin_url = "http://www.o2online.ie/wps/wcm/connect/O2/Logged+in/LoginCheck"
-		self.login_form_data = {'org' : 'o2ext', 
-														'IDButton': 'Go',
-														'org' : 'o2ext',
-														'CONNECTFORMGET' : 'TRUE',
-														'IDToken1' : self.username,
-														'IDToken2' : self.password, }
+        self.req_cookies = {'login': "iPlanetDirectoryPro",}
+        self.login_url = "https://www.o2online.ie/amserver/UI/Login"
+        self.loggedin_url = "http://www.o2online.ie/wps/wcm/connect/O2/Logged+in/LoginCheck"
+        self.login_form_data = {'org': 'o2ext', 
+                                'IDButton': 'Go',
+                                'org': 'o2ext',
+                                'CONNECTFORMGET': 'TRUE',
+                                'IDToken1': self.username,
+                                'IDToken2': self.password, }
 
-	def login(self):
-		data = urlencode(self.login_form_data).encode('utf-8')
-		request = Request(self.login_url, data)
-		request.add_header('Referer', self.loggedin_url)
-		if Account.login(self, request):
-			return self.find_sid()
-	
-	def find_sid(self):
-		url = "http://messaging.o2online.ie/ssomanager.osp?APIID=AUTH-WEBSSO&TargetApp=o2om_smscenter_new.osp%3FMsgContentID%3D-1%26SID%3D_"
-		pat = r'o2om_smscenter_new.osp\?MsgContentID=-1&SID=_&SID=(\w+)'
+    def login(self):
+        data = urlencode(self.login_form_data).encode('utf-8')
+        request = Request(self.login_url, data)
+        request.add_header('Referer', self.loggedin_url)
+        if Account.login(self, request):
+            return self.find_sid()
+    
+    def find_sid(self):
+        url = "http://messaging.o2online.ie/ssomanager.osp?APIID=AUTH-WEBSSO&TargetApp=o2om_smscenter_new.osp%3FMsgContentID%3D-1%26SID%3D_"
+        pat = r'o2om_smscenter_new.osp\?MsgContentID=-1&SID=_&SID=(\w+)'
 
-		response = urlopen(url)
-		match = re.search(pat, response.read().decode('utf-8'))
-		if match:
-			self.sid = match.group(1)
-			return True
+        response = urlopen(url)
+        match = re.search(pat, response.read().decode('utf-8'))
+        if match:
+            self.sid = match.group(1)
+            return True
 
-	def get_texts_remaining(self):
-		if hasattr(self, 'texts_remaining'):
-			return self.texts_remaining
+    def get_texts_remaining(self):
+        if hasattr(self, 'texts_remaining'):
+            return self.texts_remaining
 
-		#url = "http://messaging.o2online.ie/o2om_smscenter_new.osp"
-		#pat = r'id="spn_WebtextFree">(\d+)<\/span> free texts'
-		#data = {'MsgContentID' : '-1',
-		#				'SID' : self.sid, }
-		# data = urlencode(data).encode('utf-8')
-		#response = urlopen(url, data)
-		#match = re.search(pat, response.read().decode('utf-8'))
-		#self.texts_remaining = int(match.group(1) if match else -1)
-		#return self.texts_remaining
+        #url = "http://messaging.o2online.ie/o2om_smscenter_new.osp"
+        #pat = r'id="spn_WebtextFree">(\d+)<\/span> free texts'
+        #data = {'MsgContentID': '-1',
+        #        'SID': self.sid, }
+        # data = urlencode(data).encode('utf-8')
+        #response = urlopen(url, data)
+        #match = re.search(pat, response.read().decode('utf-8'))
+        #self.texts_remaining = int(match.group(1) if match else -1)
+        #return self.texts_remaining
 
-		url = "http://messaging.o2online.ie/smscenter_evaluate.osp"
-		data = {'SID' : self.sid,
-						'SMSText' : 'text',
-						'FID' : '6406',}
-		data = urlencode(data).encode('utf-8')
-		request = Request(url, data)
-		request.add_header('Referer', request.get_origin_req_host())
-		response = urlopen(request)
-		try:
-			content = self.parse_json(response.read().decode('utf-8'))
-		except ValueError:
-			content = None
-		self.texts_remaining = content['freeMessageCount'] if content else -1
-		return self.texts_remaining
+        url = "http://messaging.o2online.ie/smscenter_evaluate.osp"
+        data = {'SID': self.sid,
+                'SMSText': 'text',
+                'FID': '6406',}
+        data = urlencode(data).encode('utf-8')
+        request = Request(url, data)
+        request.add_header('Referer', request.get_origin_req_host())
+        response = urlopen(request)
+        try:
+            content = self.parse_json(response.read().decode('utf-8'))
+        except ValueError:
+            content = None
+        self.texts_remaining = content['freeMessageCount'] if content else -1
+        return self.texts_remaining
 
-	def send_message(self, recipient, message):
-		url = "http://messaging.o2online.ie/smscenter_send.osp"
-		data = {'SID' : self.sid,
-						'MsgContentID' : '-1', 
-						'SMSTo' : recipient,
-						'SMSText' : message, }
-		data = urlencode(data).encode('utf-8')
-		request = Request(url, data)
-		request.add_header('Referer', request.get_origin_req_host())
-		response = urlopen(request)
-		content = self.parse_json(response.read().decode('utf-8'))
-		return content['isSuccess']
+    def send_message(self, recipient, message):
+        url = "http://messaging.o2online.ie/smscenter_send.osp"
+        data = {'SID': self.sid,
+                'MsgContentID': '-1', 
+                'SMSTo': recipient,
+                'SMSText': message, }
+        data = urlencode(data).encode('utf-8')
+        request = Request(url, data)
+        request.add_header('Referer', request.get_origin_req_host())
+        response = urlopen(request)
+        content = self.parse_json(response.read().decode('utf-8'))
+        return content['isSuccess']
 
-	def save_cookies(self):
-		# Adjust session cookie so not discarded upon save and load
-		for c in self.cj:
-			if c.name == self.req_cookies['login']: login_cookie = c
-		login_cookie.discard = False
-		future = datetime.datetime.now() + datetime.timedelta(minutes=30)
-		unix_time = int(time.mktime(future.timetuple()))
-		login_cookie.expires = unix_time
-		self.cj.save()
+    def save_cookies(self):
+        # Adjust session cookie so not discarded upon save and load
+        for c in self.cj:
+            if c.name == self.req_cookies['login']: login_cookie = c
+        login_cookie.discard = False
+        future = datetime.datetime.now() + datetime.timedelta(minutes=30)
+        unix_time = int(time.mktime(future.timetuple()))
+        login_cookie.expires = unix_time
+        self.cj.save()
 
-	def parse_json(self, content):
-		# Find and strip out comments
-		comment_re = re.compile(
-				'(^)?[^\S\n]*/(?:\*(.*?)\*/[^\S\n]*|/[^\n]*)($)?',
-				re.DOTALL | re.MULTILINE
-		)
-		match = comment_re.search(content)
-		while match:
-			content = content[:match.start()] + content[match.end():]
-			match = comment_re.search(content)
+    def parse_json(self, content):
+        # Find and strip out comments
+        comment_re = re.compile(
+                '(^)?[^\S\n]*/(?:\*(.*?)\*/[^\S\n]*|/[^\n]*)($)?',
+                re.DOTALL | re.MULTILINE
+        )
+        match = comment_re.search(content)
+        while match:
+            content = content[:match.start()] + content[match.end():]
+            match = comment_re.search(content)
 
-		# Fix malformed parts
-		content = re.sub('\'', '"', content)
-		#content = re.sub('[\n\r\t]', '', content)
-		content = re.sub(' \* \d*,', ',', content)
+        # Fix malformed parts
+        content = re.sub('\'', '"', content)
+        #content = re.sub('[\n\r\t]', '', content)
+        content = re.sub(' \* \d*,', ',', content)
 
-		# Surround keys in quotes
-		def quote_wrap(match):
-			offset = match.start()
-			beginning = match.group()[match.start() - offset : match.start(1) - offset]
-			ending = match.group()[match.start(1) - offset + len(match.group(1)):]
-			return beginning + '"' + match.group(1) + '"' + ending
-		quote_re = re.compile(r'[{,][\n\r\t]*\s*(\w+)\s*:')
-		return json.loads(quote_re.sub(quote_wrap, content))
+        # Surround keys in quotes
+        def quote_wrap(match):
+            offset = match.start()
+            beginning = match.group()[match.start() - offset:match.start(1) - offset]
+            ending = match.group()[match.start(1) - offset + len(match.group(1)):]
+            return beginning + '"' + match.group(1) + '"' + ending
+        quote_re = re.compile(r'[{,][\n\r\t]*\s*(\w+)\s*:')
+        return json.loads(quote_re.sub(quote_wrap, content))
 
 if __name__ == "__main__":
-	main()
+    main()
