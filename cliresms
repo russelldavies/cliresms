@@ -60,8 +60,9 @@ def main():
         try:
             conf_file = open(__conf_file__, 'r+')
         except IOError as err:
-            print(err)
-    if conf_file: read_config(conf_file)
+            pass
+    if conf_file:
+        read_config(conf_file)
     
     # Override any conf file loaded values with cli args
     global username, password, carrier, split
