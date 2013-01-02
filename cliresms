@@ -266,7 +266,7 @@ class Account(object):
         if os.path.isfile(__cookie_file__):
             self.cj.load()
             for c in self.cj:
-                if c.name in self.req_cookies.values():
+                if c.name in self.cookies.values():
                     print("(using existing session)", end=' ')
                     sys.stdout.flush()
                     return True
@@ -282,20 +282,21 @@ class Account(object):
             return True
 
     def save_cookies(self):
-        # Adjust session cookie so not discarded upon save and load
+        # Adjust session cookie to expire after 30 minutes from now
         for c in self.cj:
-            if c.name == self.req_cookies['login']: login_cookie = c
-            if c.name == self.req_cookies['session']: session_cookie = c
-        session_cookie.discard = False
-        session_cookie.expires = login_cookie.expires
+            if c.name == self.cookies['session']: login_cookie = c
+        login_cookie.discard = False
+        future = datetime.datetime.now() + datetime.timedelta(minutes=30)
+        unix_time = int(time.mktime(future.timetuple()))
+        login_cookie.expires = unix_time
         self.cj.save()
 
 class MeteorAccount(Account):
     def __init__(self, username, password):
         super(MeteorAccount, self).__init__(username, password)
 
-        self.req_cookies = {'login': "MyMeteorCMS-cookie",
-                            'session': "JSESSIONID",}
+        self.cookies = {'login': "MyMeteorCMS-cookie",
+                        'session': "JSESSIONID",}
         self.login_url = 'https://www.mymeteor.ie/go/mymeteor-login-manager'
         self.loggedin_url = 'https://www.mymeteor.ie/postpaylanding'
         self.login_form_data = {'username': self.username,
@@ -341,8 +342,8 @@ class ThreeAccount(Account):
     def __init__(self, username, password):
         super(ThreeAccount, self).__init__(username, password)
 
-        self.req_cookies = {'login': "CAKEPHP",
-                            'session': "AWSELB",}
+        self.cookies = {'login': "CAKEPHP",
+                        'session': "AWSELB",}
         self.login_url = 'https://webtexts.three.ie/webtext/users/login'
         self.loggedin_url = 'https://webtexts.three.ie/webtext/messages/send'
         self.login_form_data = {'data[User][telephoneNo]': self.username,
@@ -371,11 +372,20 @@ class ThreeAccount(Account):
         if re.search(pat, response.read().decode('utf-8')):
             return True
 
+    def save_cookies(self):
+        # Adjust session cookie so not discarded upon save and load
+        for c in self.cj:
+            if c.name == self.cookies['login']: login_cookie = c
+            if c.name == self.cookies['session']: session_cookie = c
+        session_cookie.discard = False
+        session_cookie.expires = login_cookie.expires
+        self.cj.save()
+
 class O2Account(Account):
     def __init__(self, username, account):
         super(O2Account, self).__init__(username, password)
 
-        self.req_cookies = {'login': "iPlanetDirectoryPro",}
+        self.cookies = {'session': "iPlanetDirectoryPro",}
         self.login_url = "https://www.o2online.ie/amserver/UI/Login"
         self.loggedin_url = "http://www.o2online.ie/wps/wcm/connect/O2/Logged+in/LoginCheck"
         self.login_form_data = {'org': 'o2ext', 
@@ -443,16 +453,6 @@ class O2Account(Account):
         response = urlopen(request)
         content = self.parse_json(response.read().decode('utf-8'))
         return content['isSuccess']
-
-    def save_cookies(self):
-        # Adjust session cookie so not discarded upon save and load
-        for c in self.cj:
-            if c.name == self.req_cookies['login']: login_cookie = c
-        login_cookie.discard = False
-        future = datetime.datetime.now() + datetime.timedelta(minutes=30)
-        unix_time = int(time.mktime(future.timetuple()))
-        login_cookie.expires = unix_time
-        self.cj.save()
 
     def parse_json(self, content):
         # Find and strip out comments
