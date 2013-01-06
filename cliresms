@@ -290,7 +290,9 @@ def send_message(recipient, message):
         print("You don't have any more texts remaining.")
         sys.exit(1)
     elif account.get_texts_remaining() < 0:
+        print("ERROR: ----------------------------")
         print("Site inaccessible. Try again later.")
+        print("ERROR: ----------------------------")
         sys.exit(1)
 
     # Send message
