@@ -359,8 +359,8 @@ class Account(object):
 
         # Contains letters or other invalid characters
         if re.search(r'[^\d\+]', recipient):
-            raise ValueError("Number contains invalid characters")
-
+            raise ValueError("Number contains invalid characters. Only a + and \
+                    digits are allowed.")
         return recipient
 
 class MeteorAccount(Account):
@@ -397,7 +397,8 @@ class MeteorAccount(Account):
         # Valid Irish number
         if re.search(r'^08[3567]\d{7}', recipient):
             return recipient
-        raise ValueError("%s is not a valid Irish mobile number" % recipient)
+        raise ValueError("%s is not a valid Irish mobile number. Expected a \
+                10 digit number to begin with 08." % recipient)
 
     def send_message(self, recipient, message):
         url = 'https://www.mymeteor.ie/mymeteorapi/index.cfm'
