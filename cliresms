@@ -126,29 +126,51 @@ def read_config(file):
 
     for line in map(lambda s: s.strip(), file.readlines()):
         log.debug('Parsing line:\n%s', line)
-        if not line:    # We are handling an empty line
-            continue
-        if line.startswith('#'):
+        # Skip over empty lines or comments
+        if not line or line.startswith('#'):
             continue
         elif 'username' in line:
             username = line.split()[-1]
-            next
         elif 'password' in line:
             password = line.split()[-1]
-            next
         elif 'carrier' in line:
             carrier = line.split()[-1]
-            next
         elif 'nosplit' in line:
             split = True
-            next
         elif 'alias' in line:
             try:
-                # Matches a line in the form: alias name +1234 5789
+                # Matches a line in the form: alias name +1234 foo 5789
                 # There can be variable whitespace between the tokens and
                 # the numbers can be in international or local form
-                matches = re.search(r'^\s*alias\s*([\w\.\-\_]*)\s*([\d\s\+]*)\s*$', line)
-                aliases[matches.group(1)] = matches.group(2).split()
+                pattern = r'^\s*alias\s+([\w\.\-\_]+)\s+([\w\s\+\.-]+)\s*'
+                matches = re.search(pattern, line)
+                alias_name = matches.group(1)
+                # Take out dots and dashes - easier to parse later
+                alias_contacts = re.sub(r'[\.-]', '', matches.group(2).strip())
+                # Must be a number optionally starting with a '+' or word
+                alias_contacts = re.findall(r'(\+?\d+|\w+)', alias_contacts)
+
+                alias_numbers = []
+                for contact in alias_contacts:
+                    # Check if valid number with optional '+' at the start
+                    if re.search(r'^\+?\d+$', contact):
+                        number = contact
+                    else:
+                        # Not a number, so it's a name. The name needs to be already
+                        # defined in aliases
+                        try:
+                            log.debug('Looking for %s: %s', contact, number)
+                            number = aliases[contact][0]
+                        except KeyError:
+                            log.exception('Could not find %s, if you define '
+                                'aliases, you need to defined the referenced '
+                                'numbers first', name_or_number)
+                            log.info('So far, the known aliases are: %s', aliases)
+                            raise
+                    alias_numbers.append(number)
+
+                log.debug('Defining %s to be %s', alias_name, alias_numbers)
+                aliases[alias_name] = alias_numbers
             except AttributeError:
                 log.exception("Problem parsing line:\n%s", line)
                 raise
