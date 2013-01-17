@@ -35,7 +35,7 @@ log = logging.getLogger()
 
 username = None
 password = None
-split = None
+split = True
 carrier = None
 message = None
 aliases = {}
@@ -58,7 +58,6 @@ def main():
     loglevel = logging.WARN - (args.verbose * 10)
     logging.basicConfig(level=loglevel)
 
-
     # Read supplied conf file otherwise try to load default conf file (if exists)
     global conf_file
     if args.conf_file:
@@ -70,8 +69,6 @@ def main():
             pass
     if conf_file:
         read_config(conf_file)
-    
-
     
     # Override any conf file loaded values with cli args
     global username, password, carrier, split
@@ -94,8 +91,8 @@ def main():
         if not password:
             password = getpass.getpass()
 
-    if not split:
-        split = args.split_messages
+    if not split and args.split_messages:
+        split = True
 
     # Build a list of numbers from aliases
     try:
@@ -108,21 +105,6 @@ def main():
     # Send SMS
     try:
         for r in recipients:
-            for m in message:
-                send_message(r, m)
-    except HTTPError as e:
-        print("The server couldn't fulfill the request.")
-        print("Error code: ", e.code)
-    except URLError as e:
-        print("Could not contact server, possible connectivity problem.")
-        print("Reason: ", e.reason)
-    
-    # Save any unknown numbers to config file
-    save_aliases()
-
-    # Send SMS
-    try:
-        for r in recipients[:]:
             for m in message:
                 send_message(r, m)
     except HTTPError as e:
@@ -150,7 +132,7 @@ def read_config(file):
         elif 'carrier' in line:
             carrier = line.split()[-1]
         elif 'nosplit' in line:
-            split = True
+            split = False
         elif 'alias' in line:
             try:
                 # Matches a line in the form: alias name +1234 foo 5789
@@ -205,20 +187,24 @@ def get_message(message=None):
             input.append(line)
         message = ''.join(input)
 
-    length = 160
-    if len(message) > length and split:
-        # Split message into multiple parts
-        messages = [message[i:i+length].strip()
-                    for i in range(0, len(message)-1, length)]
+    max_length = 160
+    if len(message) > max_length:
+        if split:
+            # Split message into multiple parts
+            messages = [message[i:i+max_length].strip()
+                        for i in range(0, len(message), max_length)]
+            print("Message length %d (%d max) will be sent in %d texts" %
+                    (len(message), max_length, len(messages)))
+        else:
+            log.warning('Message is %d chars, sending only first %d '
+                        'chars', len(message), max_length)
+            messages = [message[:max_length]]
     else:
-        log.warning('Message is longer than %d: %d, sending only %d '
-            'chars', length, len(message), length)
-        messages = [message[:length]]
+        messages = [message[:max_length]]
 
-    log.info('Messages (%d): %s', len(message), messages)
-    print ("Sending %d messages (%d)" % (len(messages), len(message)))
+    message_length = sum([len(message) for message in messages])
+    log.info('Messages (%d chars): %s', message_length, messages)
     return messages
-
 
 def process_recipients(arg_recipients):
     for recipient in arg_recipients:
@@ -318,7 +304,7 @@ def setup_parser():
             help='Use this configuration file (defaults to ~/.cliresms.conf)')
     parser.add_argument('-s', '--split-messages', action='store_true',
             help='Allow message to be split into multiple SMSs (the '
-            'default)', default=True)
+            'default, overrides config file nosplit)')
     parser.add_argument('-C', '--carrier', metavar='NAME',
             help="Force the carrier to be this (``meteor'', ``o2'' or ``three''")
     parser.add_argument('-m', '--message', metavar='STRING', 
