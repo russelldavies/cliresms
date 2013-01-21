@@ -104,9 +104,7 @@ def main():
 
     # Send SMS
     try:
-        for r in recipients:
-            for m in message:
-                send_message(r, m)
+        send_message(recipients, message)
     except HTTPError as e:
         print("The server couldn't fulfill the request.")
         print("Error code: ", e.code)
@@ -207,10 +205,11 @@ def get_message(message=None):
     return messages
 
 def process_recipients(arg_recipients):
+    """Return a list of only numbers from alias definitions and any numbers entered"""
     for recipient in arg_recipients:
         if recipient in aliases:
-            # an alias contains a list of numbers so flatten out
-            [recipients.append(r) for r in aliases[recipient]]
+            # an alias contains a list of numbers so extend rather than append
+            recipients.extend(aliases[recipient])
         else:
             # recipient is a number not alias
             if re.search(r'\+?\d', recipient):
@@ -247,7 +246,7 @@ def save_aliases():
         except:
             print("Could not write aliases to configuration file %s" % os.path.abspath(f.name))
 
-def send_message(recipient, message):
+def send_message(recipients, message):
     global username, password, carrier
 
     account_type = {'meteor': MeteorAccount,
@@ -258,24 +257,25 @@ def send_message(recipient, message):
     if not account_type:
         print("Invalid carrier. Qutting...")
         sys.exit(1)
-
     account = account_type(username, password)
-    try:
-        recipient = account.validate_number(recipient)
-    except ValueError as err:
-        print(err)
-        recipients.remove(recipient)
-        return
+
+    # Validate all recipients and remove any offending entries
+    for recipient in recipients[:]:
+        try:
+            recipients[recipients.index(recipient)] = account.validate_number(recipient)
+        except ValueError as err:
+            log.warning(err)
+            recipients.remove(recipient)
 
     if account.login():
         print("Logged in")
     else:
         print("Could not login, quitting...")
         sys.exit(1)
-    if account.get_texts_remaining() == 0:
+    if account.texts_remaining == 0:
         print("You don't have any more texts remaining.")
         sys.exit(1)
-    elif account.get_texts_remaining() < 0:
+    elif account.texts_remaining < 0:
         print("ERROR: ----------------------------")
         print("Site inaccessible. Try again later.")
         print("ERROR: ----------------------------")
@@ -284,10 +284,10 @@ def send_message(recipient, message):
     # Send message
     print("Sending message...", end='')
     sys.stdout.flush()
-    if account.send_message(recipient, message):
-        account.texts_remaining -= 1
-        print("Message sent, %s texts remaining." % account.texts_remaining)
-        return True
+    for message_part in message:
+        if account.send_message(recipients, message_part):
+            account.texts_remaining -= len(recipients)
+            print("Message sent, %s texts remaining." % account.texts_remaining)
 
 def setup_parser():
     parser = argparse.ArgumentParser(prog='cliresms',
@@ -323,6 +323,7 @@ class Account(object):
         self.username = username
         self.password = password
         self.cj = cookiejar.MozillaCookieJar(__cookie_file__)
+        self._texts_remaining = None
 
         opener = build_opener(HTTPCookieProcessor(self.cj))
         install_opener(opener)
@@ -374,6 +375,16 @@ class Account(object):
                     digits are allowed.")
         return recipient
 
+    @property
+    def texts_remaining(self):
+        if not self._texts_remaining:
+            self._texts_remaining = self._get_texts_remaining()
+        return self._texts_remaining
+
+    @texts_remaining.setter
+    def texts_remaining(self, value):
+        self._texts_remaining = value
+
 class MeteorAccount(Account):
     def __init__(self, username, password):
         super(MeteorAccount, self).__init__(username, password)
@@ -387,10 +398,7 @@ class MeteorAccount(Account):
                                 'login': '',
                                 'returnTo': '/',}
 
-    def get_texts_remaining(self):
-        if hasattr(self, 'texts_remaining'):
-            return self.texts_remaining
-
+    def _get_texts_remaining(self):
         url = 'https://www.mymeteor.ie/go/freewebtext'
         pat = r'Free web texts left <input type="text" id="numfreesmstext" value="(\d+)" disabled size=2>'
 
@@ -413,18 +421,19 @@ class MeteorAccount(Account):
         raise ValueError("%s is not a valid Irish mobile number. Expected a \
                 10 digit number to begin with 08." % recipient)
 
-    def send_message(self, recipient, message):
+    def send_message(self, recipients, message):
         url = 'https://www.mymeteor.ie/mymeteorapi/index.cfm'
         pat = r'showEl\("sentTrue"\)'
 
-        # Add recipient
-        data = {'event': 'smsAjax',
-                'func': 'addEnteredMsisdns',
-                'ajaxRequest': 'addEnteredMSISDNs',
-                'remove': '-',
-                'add': '0|' + recipient,}
-        params = urlencode(data)#.encode('utf-8')
-        urlopen(url + '?' + params)
+        for recipient in recipients:
+            # Add recipient
+            data = {'event': 'smsAjax',
+                    'func': 'addEnteredMsisdns',
+                    'ajaxRequest': 'addEnteredMSISDNs',
+                    'remove': '-',
+                    'add': '0|' + recipient,}
+            params = urlencode(data)#.encode('utf-8')
+            urlopen(url + '?' + params)
 
         # Add message
         data = {'event': 'smsAjax',
@@ -446,10 +455,7 @@ class ThreeAccount(Account):
         self.login_form_data = {'data[User][telephoneNo]': self.username,
                                 'data[User][pin]': self.password}
 
-    def get_texts_remaining(self):
-        if hasattr(self, 'texts_remaining'):
-            return self.texts_remaining
-
+    def _get_texts_remaining(self):
         url = self.loggedin_url
         pat = r'Remaining texts: <\/span><br\/>(\d+) \(of \d+\)'
 
@@ -458,11 +464,11 @@ class ThreeAccount(Account):
         self.texts_remaining = int(match.group(1) if match else -1)
         return self.texts_remaining
 
-    def send_message(self, recipient, message):
+    def send_message(self, recipients, message):
         url = self.loggedin_url
         pat = r'Message sent'
         data = {'data[Message][message]': message,
-                'data[Message][recipients_individual]': recipient, }
+                'data[Message][recipients_individual]': ', '.join(recipients), }
 
         data = urlencode(data).encode('utf-8')
         response = urlopen(url, data)
@@ -509,10 +515,7 @@ class O2Account(Account):
             self.sid = match.group(1)
             return True
 
-    def get_texts_remaining(self):
-        if hasattr(self, 'texts_remaining'):
-            return self.texts_remaining
-
+    def _get_texts_remaining(self):
         #url = "http://messaging.o2online.ie/o2om_smscenter_new.osp"
         #pat = r'id="spn_WebtextFree">(\d+)<\/span> free texts'
         #data = {'MsgContentID': '-1',
@@ -538,11 +541,11 @@ class O2Account(Account):
         self.texts_remaining = content['freeMessageCount'] if content else -1
         return self.texts_remaining
 
-    def send_message(self, recipient, message):
+    def send_message(self, recipients, message):
         url = "http://messaging.o2online.ie/smscenter_send.osp"
         data = {'SID': self.sid,
                 'MsgContentID': '-1', 
-                'SMSTo': recipient,
+                'SMSTo': ', '.join(recipient),
                 'SMSText': message, }
         data = urlencode(data).encode('utf-8')
         request = Request(url, data)
