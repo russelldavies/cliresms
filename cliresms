@@ -53,7 +53,7 @@ def main():
         args = cli_parser.parse_args()
     except IOError as err:
         print(err)
-        sys.exit(err.errno)
+        return err.errno
 
     loglevel = logging.WARN - (args.verbose * 10)
     logging.basicConfig(level=loglevel)
@@ -76,7 +76,7 @@ def main():
         carrier = args.carrier
     if not carrier:
         print("You must specify a carrier. Qutting...")
-        sys.exit(1)
+        return 1
 
     if args.username:
         username = args.username
@@ -98,7 +98,7 @@ def main():
     try:
         process_recipients(args.recipients)
     except ValueError:
-        sys.exit(1)
+        return 1
 
     message = get_message(args.message)
 
@@ -256,7 +256,7 @@ def send_message(recipients, message):
                     }.get(carrier,None)
     if not account_type:
         print("Invalid carrier. Qutting...")
-        sys.exit(1)
+        return 1
     account = account_type(username, password)
 
     # Validate all recipients and remove any offending entries
@@ -271,15 +271,15 @@ def send_message(recipients, message):
         print("Logged in")
     else:
         print("Could not login, quitting...")
-        sys.exit(1)
+        return 1
     if account.texts_remaining == 0:
         print("You don't have any more texts remaining.")
-        sys.exit(1)
+        return 1
     elif account.texts_remaining < 0:
         print("ERROR: ----------------------------")
         print("Site inaccessible. Try again later.")
         print("ERROR: ----------------------------")
-        sys.exit(1)
+        return 1
 
     # Send message
     print("Sending message...", end='')
@@ -316,7 +316,7 @@ def setup_parser():
 
 def signal_handler(signum, frame):
     print("\nokay, I'm outta here...")
-    sys.exit(0)
+    sys.exit(1)
 
 class Account(object):
     def __init__(self, username, password):
@@ -580,4 +580,4 @@ class O2Account(Account):
         return json.loads(quote_re.sub(quote_wrap, content))
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
