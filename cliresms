@@ -260,9 +260,10 @@ def send_message(recipients, message):
     account = account_type(username, password)
 
     # Validate all recipients and remove any offending entries
-    for recipient in recipients[:]:
+    recipients_validated = []
+    for recipient in recipients:
         try:
-            recipients[recipients.index(recipient)] = account.validate_number(recipient)
+            recipients_validated.append(account.validate_number(recipient))
         except ValueError as err:
             log.warning(err)
             recipients.remove(recipient)
@@ -285,8 +286,8 @@ def send_message(recipients, message):
     print("Sending message...", end='')
     sys.stdout.flush()
     for message_part in message:
-        if account.send_message(recipients, message_part):
-            account.texts_remaining -= len(recipients)
+        if account.send_message(recipients_validated, message_part):
+            account.texts_remaining -= len(recipients_validated)
             print("Message sent, %s texts remaining." % account.texts_remaining)
 
 def setup_parser():
