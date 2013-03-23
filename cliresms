@@ -25,6 +25,11 @@ except ImportError:
     from urllib import urlencode
     from urllib2 import urlopen, build_opener, install_opener, Request, HTTPCookieProcessor
     from urllib2 import URLError, HTTPError
+# Python 2-3 compatibility hack
+try:
+    raw_input
+except NameError:
+    raw_input = input
 
 __version__ = '0.1'
 # Default conf file is in ~/.cliresms.conf
@@ -177,13 +182,15 @@ def get_message(message=None):
         print("Enter your message:")
         input = []
         while True:
-            line = sys.stdin.readline()
-            # Complete on EOF (ctrl-d) or '.' at start of a line
-            if not line or line == '.\n':
-                input[-1] = input[-1].rstrip()
+	    try:
+		# Break on EOF (ctrl-d) or a line containing a single '.'
+		line = raw_input()
+		if '.' == line:
+		    break
+	    except EOFError:
                 break
             input.append(line)
-        message = ''.join(input)
+	message = '\n'.join(input)
 
     max_length = 160
     if len(message) > max_length:
