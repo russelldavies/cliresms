@@ -108,14 +108,17 @@ def main():
     message = get_message(args.message)
 
     # Send SMS
-    try:
-        send_message(recipients, message)
-    except HTTPError as e:
-        print("The server couldn't fulfill the request.")
-        print("Error code: ", e.code)
-    except URLError as e:
-        print("Could not contact server, possible connectivity problem.")
-        print("Reason: ", e.reason)
+    while True:
+        try:
+            send_message(recipients, message)
+            break
+        except (HTTPError, URLError, LoginException) as e:
+            log.error(e.message)
+            choice = raw_input("Retry send? [Y/n] ").lower()
+            if choice in ('y', ''):
+                continue
+            else:
+                break
     
     # Save any unknown numbers to config file
     save_aliases()
@@ -182,15 +185,15 @@ def get_message(message=None):
         print("Enter your message:")
         input = []
         while True:
-	    try:
-		# Break on EOF (ctrl-d) or a line containing a single '.'
-		line = raw_input()
-		if '.' == line:
-		    break
-	    except EOFError:
+            try:
+                # Break on EOF (ctrl-d) or a line containing a single '.'
+                line = raw_input()
+                if '.' == line:
+                    break
+            except EOFError:
                 break
             input.append(line)
-	message = '\n'.join(input)
+        message = '\n'.join(input)
 
     max_length = 160
     if len(message) > max_length:
@@ -262,8 +265,8 @@ def send_message(recipients, message):
                     #'vodafone': VodafoneAccount,
                     }.get(carrier,None)
     if not account_type:
-        print("Invalid carrier. Qutting...")
-        return 1
+        log.error("Invalid carrier. Qutting...")
+        return 
     account = account_type(username, password)
 
     # Validate all recipients and remove any offending entries
@@ -278,16 +281,11 @@ def send_message(recipients, message):
     if account.login():
         print("Logged in")
     else:
-        print("Could not login, quitting...")
-        return 1
+        raise LoginException("Could not login.")
     if account.texts_remaining == 0:
-        print("You don't have any more texts remaining.")
-        return 1
+        raise LoginException("You don't have any more texts remaining.")
     elif account.texts_remaining < 0:
-        print("ERROR: ----------------------------")
-        print("Site inaccessible. Try again later.")
-        print("ERROR: ----------------------------")
-        return 1
+        raise LoginException("Website inaccessible. Try again later.")
 
     # Send message
     print("Sending message...", end='')
@@ -586,6 +584,9 @@ class O2Account(Account):
             return beginning + '"' + match.group(1) + '"' + ending
         quote_re = re.compile(r'[{,][\n\r\t]*\s*(\w+)\s*:')
         return json.loads(quote_re.sub(quote_wrap, content))
+
+class LoginException(Exception):
+    pass
 
 if __name__ == "__main__":
     sys.exit(main())
