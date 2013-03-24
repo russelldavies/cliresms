@@ -31,8 +31,7 @@ try:
 except NameError:
     raw_input = input
 
-__version__ = '0.1'
-# Default conf file is in ~/.cliresms.conf
+__version__ = '0.2'
 __conf_file__ = os.path.join(os.path.expanduser("~"), '.cliresms.conf')
 __cookie_file__ = os.path.join(os.path.expanduser("~"), '.cliresms.cookie')
 

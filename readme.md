@@ -41,6 +41,9 @@ Options
     
     -m, --message=STRING
     	Don't wait for STDIN, send this message
+
+    -v, --verbose
+        Show log messages. Specify more 'v' to increase verbosity level
     
     -h, --help
     	Prints this help message and exits
@@ -68,15 +71,15 @@ Configuration file example:
 
 Author
 ------
-Russell Davies \<russell@zeroflux.net\>
+Russell Davies and Tobias Mueller.
 
 Acknowledgements
 ----------------
-Thanks to David McNamara \<me.at.mackers.dot.com\> for o2sms.
+Thanks to David McNamara for o2sms.
 
-Copyright
----------
-Copyright 2012 Russell Davies
+License
+-------
+Copyright (c) 2012 Russell Davies
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
