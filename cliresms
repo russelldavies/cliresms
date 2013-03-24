@@ -345,7 +345,7 @@ class Account(object):
                     '%s', __cookie_file__)
                 raise
             for c in self.cj:
-                if c.name in self.cookies.values():
+                if c.name in self.cookies['session']:
                     print("(using existing session)", end=' ')
                     sys.stdout.flush()
                     return True
