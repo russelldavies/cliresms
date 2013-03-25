@@ -193,21 +193,22 @@ def get_message(message=None):
                 break
             input.append(line)
         message = '\n'.join(input)
+    return message
 
-    max_length = 160
-    if len(message) > max_length:
+def split_message(message, length=160):
+    if len(message) > length:
         if split:
             # Split message into multiple parts
-            messages = [message[i:i+max_length].strip()
-                        for i in range(0, len(message), max_length)]
+            messages = [message[i:i+length].strip()
+                        for i in range(0, len(message), length)]
             print("Message length %d (%d max) will be sent in %d texts" %
-                    (len(message), max_length, len(messages)))
+                    (len(message), length, len(messages)))
         else:
             log.warning('Message is %d chars, sending only first %d '
-                        'chars', len(message), max_length)
-            messages = [message[:max_length]]
+                        'chars', len(message), length)
+            messages = [message[:length]]
     else:
-        messages = [message[:max_length]]
+        messages = [message[:length]]
 
     message_length = sum([len(message) for message in messages])
     log.info('Messages (%d chars): %s', message_length, messages)
@@ -289,7 +290,7 @@ def send_message(recipients, message):
     # Send message
     print("Sending message...", end='')
     sys.stdout.flush()
-    for message_part in message:
+    for message_part in split_message(message, account.message_length):
         if account.send_message(recipients_validated, message_part):
             account.texts_remaining -= len(recipients_validated)
             print("Message sent, %s texts remaining." % account.texts_remaining)
@@ -324,6 +325,8 @@ def signal_handler(signum, frame):
     sys.exit(1)
 
 class Account(object):
+    message_length = 480
+
     def __init__(self, username, password):
         self.username = username
         self.password = password
