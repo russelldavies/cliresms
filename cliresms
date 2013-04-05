@@ -112,6 +112,8 @@ def main():
             send_message(recipients, message)
             break
         except (HTTPError, URLError, LoginException) as e:
+            e.message = {HTTPError: "Server could not fulfill the request.",
+                 URLError: "Server unreachable."}.get(type(e), e.message)
             log.error(e.message)
             choice = raw_input("Retry send? [Y/n] ").lower()
             if choice in ('y', ''):
