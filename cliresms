@@ -45,6 +45,8 @@ message = None
 aliases = {}
 recipients = []
 conf_file = None
+get_carriers = lambda: dict((cls.carrier_name(), cls) for cls in Account.__subclasses__())
+
 
 def main():
     # Register signal handler to catch ctrl+c to gracefully quit
@@ -76,24 +78,26 @@ def main():
     
     # Override any conf file loaded values with cli args
     global username, password, carrier, split
-    if args.carrier:
-        carrier = args.carrier
-    if not carrier:
-        print("You must specify a carrier. Qutting...")
-        return 1
-
     if args.username:
         username = args.username
     else:
         if not username:
-            username = getpass.getuser()
-            print("Using login name: %s" % username)
-
+            username = raw_input("Username: ").strip()
     if args.password:
         password = args.password
     else:
         if not password:
             password = getpass.getpass()
+    carrier_names = get_carriers().keys()
+    if args.carrier:
+        carrier = args.carrier
+    else:
+        if not carrier:
+            carrier = raw_input("Carrier [%s]: " % ', '.join(carrier_names)).strip()
+    if carrier not in carrier_names:
+        log.error("Invalid carrier. Specify one of: %s" %
+                ', '.join(carrier_names))
+        return 1
 
     if not split and args.split_messages:
         split = True
@@ -261,11 +265,7 @@ def save_aliases():
 def send_message(recipients, message):
     global username, password, carrier
 
-    account_type = {'meteor': MeteorAccount,
-                    'o2': O2Account,
-                    'three': ThreeAccount,
-                    #'vodafone': VodafoneAccount,
-                    }.get(carrier,None)
+    account_type = get_carriers().get(carrier)
     if not account_type:
         log.error("Invalid carrier. Qutting...")
         return 
@@ -394,6 +394,14 @@ class Account(object):
     @texts_remaining.setter
     def texts_remaining(self, value):
         self._texts_remaining = value
+
+    @classmethod
+    def carrier_name(cls):
+        # This expects a class to be named something like MeteorAccount
+        # and takes the lower of the first word, i.e., meteor
+        match = re.match(r'(\w+)Account', cls.__name__)
+        if match:
+            return match.group(1).lower()
 
 class MeteorAccount(Account):
     def __init__(self, username, password):
