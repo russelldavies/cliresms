@@ -287,7 +287,7 @@ def send_message(recipients, message):
     if account.texts_remaining == 0:
         raise LoginException("You don't have any more texts remaining.")
     elif account.texts_remaining < 0:
-        raise LoginException("Website inaccessible. Try again later.")
+        raise LoginException("Could not determine number of texts remaining.")
 
     # Send message
     print("Sending message...", end='')
@@ -475,7 +475,7 @@ class ThreeAccount(Account):
 
     def _get_texts_remaining(self):
         url = self.loggedin_url
-        pat = r'Remaining texts: <\/span><br\/>(\d+) \(of \d+\)'
+        pat = r'Remaining texts\D*(\d+) \(of (\d+)\)'
 
         response = urlopen(url)
         match = re.search(pat, response.read().decode('utf-8'))
