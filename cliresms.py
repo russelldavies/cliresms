@@ -31,7 +31,7 @@ try:
 except NameError:
     raw_input = input
 
-__version__ = '0.2'
+__version__ = '0.2.0'
 __conf_file__ = os.path.join(os.path.expanduser("~"), '.cliresms.conf')
 __cookie_file__ = os.path.join(os.path.expanduser("~"), '.cliresms.cookie')
 
@@ -75,7 +75,7 @@ def main():
             pass
     if conf_file:
         read_config(conf_file)
-    
+
     # Override any conf file loaded values with cli args
     global username, password, carrier, split
     if args.username:
@@ -124,7 +124,7 @@ def main():
                 continue
             else:
                 break
-    
+
     # Save any unknown numbers to config file
     save_aliases()
 
@@ -182,7 +182,7 @@ def read_config(file):
                 log.exception("Problem parsing line:\n%s", line)
                 raise
         else:
-            log.error('Could not parse line:\n%s', line)        
+            log.error('Could not parse line:\n%s', line)
 
 def get_message(message=None):
     if not message:
@@ -268,7 +268,7 @@ def send_message(recipients, message):
     account_type = get_carriers().get(carrier)
     if not account_type:
         log.error("Invalid carrier. Qutting...")
-        return 
+        return
     account = account_type(username, password)
 
     # Validate all recipients and remove any offending entries
@@ -303,19 +303,19 @@ def setup_parser():
     parser.add_argument('recipients', metavar='<number|alias|group>',
         nargs='+',
         help='One or more numbers or entries in the config file')
-    parser.add_argument('-u', '--username', metavar='STRING', 
+    parser.add_argument('-u', '--username', metavar='STRING',
             help='Use this username (defaults to unix username)')
-    parser.add_argument('-p', '--password', metavar='STRING', 
+    parser.add_argument('-p', '--password', metavar='STRING',
             help='Use this password (if omitted, will prompt for password)')
     parser.add_argument('-c', '--config', metavar='FILE', type=argparse.FileType('r+'),
-            dest='conf_file', #default=__conf_file__, 
+            dest='conf_file', #default=__conf_file__,
             help='Use this configuration file (defaults to ~/.cliresms.conf)')
     parser.add_argument('-s', '--split-messages', action='store_true',
             help='Allow message to be split into multiple SMSs (the '
             'default, overrides config file nosplit)')
     parser.add_argument('-C', '--carrier', metavar='NAME',
             help="Force the carrier to be this (``meteor'', ``o2'' or ``three''")
-    parser.add_argument('-m', '--message', metavar='STRING', 
+    parser.add_argument('-m', '--message', metavar='STRING',
             help="Don't wait for STDIN, send this message")
     parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('--version', action='version',
@@ -509,7 +509,7 @@ class O2Account(Account):
         self.cookies = {'session': "iPlanetDirectoryPro",}
         self.login_url = "https://www.o2online.ie/amserver/UI/Login"
         self.loggedin_url = "http://www.o2online.ie/wps/wcm/connect/O2/Logged+in/LoginCheck"
-        self.login_form_data = {'org': 'o2ext', 
+        self.login_form_data = {'org': 'o2ext',
                                 'IDButton': 'Go',
                                 'org': 'o2ext',
                                 'CONNECTFORMGET': 'TRUE',
@@ -522,7 +522,7 @@ class O2Account(Account):
         request.add_header('Referer', self.loggedin_url)
         if Account.login(self, request):
             return self.find_sid()
-    
+
     def find_sid(self):
         url = "http://messaging.o2online.ie/ssomanager.osp?APIID=AUTH-WEBSSO&TargetApp=o2om_smscenter_new.osp%3FMsgContentID%3D-1%26SID%3D_"
         pat = r'o2om_smscenter_new.osp\?MsgContentID=-1&SID=_&SID=(\w+)'
@@ -562,7 +562,7 @@ class O2Account(Account):
     def send_message(self, recipients, message):
         url = "http://messaging.o2online.ie/smscenter_send.osp"
         data = {'SID': self.sid,
-                'MsgContentID': '-1', 
+                'MsgContentID': '-1',
                 'SMSTo': ', '.join(recipient),
                 'SMSText': message, }
         data = urlencode(data).encode('utf-8')
